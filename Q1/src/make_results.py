@@ -100,10 +100,13 @@ with zipfile.ZipFile(OUT, 'w', zipfile.ZIP_DEFLATED) as zout:
         zout.writestr(item, zin.read(item.filename))
 
     # sheet1: 计划购电量 (B2..B145)
+    # 内部数组是自然日顺序：x[0]=0:00-0:10 ... x[143]=23:50-24:00；
+    # 官方模板行顺序是：0:10-0:20 ... 23:50-24:00, 次日0:00-0:10。
+    # 因此模板第 k+2 行应写 x[(k+1) % N]。
     root1 = ET.fromstring(zin.read('xl/worksheets/sheet1.xml'))
     rows1 = {r.get('r'): r for r in root1.findall(f'{{{MAIN_NS}}}sheetData/{{{MAIN_NS}}}row')}
     for k in range(N):
-        fill_cell(rows1[str(k + 2)], 'B', x[k])
+        fill_cell(rows1[str(k + 2)], 'B', x[(k + 1) % N])
     write_sheet(zout, 'sheet1', root1)
 
     # 充放电量

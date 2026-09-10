@@ -314,9 +314,13 @@ def check_tables(x, c, d, E, cost):
         "18:00-18:10": 636.98,
         "20:00-20:10": 0.00,
     }
+    ok = True
     max_diff = max(abs(expected_spec[k] - v) for k, v in report_spec.items())
+    ok &= max_diff < 0.01
     print(f"  [{'PASS' if max_diff < 0.01 else 'FAIL'}] 表 1 数值与重算最大误差: {max_diff:.4f}")
+    ok &= abs(x.sum() - 59482.70) < 0.01
     print(f"  [{'PASS' if abs(x.sum() - 59482.70) < 0.01 else 'FAIL'}] 全天购电量: {x.sum():.4f}")
+    ok &= abs(cost - 35126.85) < 0.01
     print(f"  [{'PASS' if abs(cost - 35126.85) < 0.01 else 'FAIL'}] 全天购电费: {cost:.4f}")
 
     expected_blocks = []
@@ -334,12 +338,16 @@ def check_tables(x, c, d, E, cost):
         max(abs(e[0] - r[0]), abs(e[1] - r[1]))
         for e, r in zip(expected_blocks, report_blocks)
     )
+    ok &= max_cd < 0.01
     print(f"  [{'PASS' if max_cd < 0.01 else 'FAIL'}] 表 2 数值与重算最大误差: {max_cd:.4f}")
+    ok &= abs(E[0] - 6000) < 0.01 and abs(E[-1] - 6000) < 0.01
     print(f"  [{'PASS' if abs(E[0] - 6000) < 0.01 and abs(E[-1] - 6000) < 0.01 else 'FAIL'}] "
           f"0:00/24:00 储电量: {E[0]:.4f} / {E[-1]:.4f}")
+    return ok
 
 
 def check_result_file(x, c, d, E):
+    ok = True
     try:
         sheets = xr.read_sheet_rows(str(OUTPUT_DIR / 'result1.xlsx'))
         names = list(sheets)
@@ -350,8 +358,10 @@ def check_result_file(x, c, d, E):
             numeric.append(row[1] if len(row) > 1 else None)
         if len(numeric) == len(x) and all(v is not None for v in numeric):
             diff = np.max(np.abs(np.array(numeric, dtype=float) - np.roll(x, -1)))
+            ok &= diff <= 1e-4
             print(f"  [{'PASS' if diff <= 1e-4 else 'FAIL'}] result1.xlsx 购电量与重算最大误差: {diff:.3e}")
         else:
+            ok = False
             print("  [FAIL] result1.xlsx 购电量行数或空值异常")
 
         block_rows = charge[1:7]
@@ -368,9 +378,12 @@ def check_result_file(x, c, d, E):
             max(abs(g[0] - e[0]), abs(g[1] - e[1]))
             for g, e in zip(got_blocks, expected_blocks)
         )
+        ok &= cd_diff < 0.01
         print(f"  [{'PASS' if cd_diff < 0.01 else 'FAIL'}] result1.xlsx 充放电量块与重算最大误差: {cd_diff:.4f}")
     except Exception as exc:  # noqa: BLE001
+        ok = False
         print(f"  [FAIL] 读取 result1.xlsx 失败: {exc}")
+    return ok
 
 
 def main():
@@ -404,16 +417,16 @@ def main():
     ok_kkt = check_kkt(res, meta, price, L, G, A_ub, b_ub, A_eq, b_eq, bounds)
 
     print("\n[4] 报告表 1 / 表 2 复核")
-    check_tables(x, c, d, E, res.fun)
+    ok_tables = check_tables(x, c, d, E, res.fun)
 
     print("\n[5] result1.xlsx 复核")
-    check_result_file(x, c, d, E)
+    ok_file = check_result_file(x, c, d, E)
 
     print("\n" + "=" * 76)
-    if ok_primal and ok_kkt:
+    if ok_primal and ok_kkt and ok_tables and ok_file:
         print("结论: 模型检验 PASS。求解结果满足全部约束，且 KKT 条件成立。")
     else:
-        print("结论: 模型检验存在 FAIL 项，请检查建模或数值精度。")
+        print("结论: 模型检验存在 FAIL 项，请检查建模、数值精度或结果文件对齐。")
     print("=" * 76)
 
 
