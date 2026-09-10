@@ -13,12 +13,24 @@
   E0    = 6000 kWh    0:00 初值
   eta   = 0.9         充放电效率（η_c = η_d = 0.9，往返效率 0.81）
 """
+import sys
+from pathlib import Path
+
+#路径
+SRC_DIR = Path(__file__).resolve().parent
+Q_DIR = SRC_DIR.parent
+REPO_ROOT = Q_DIR.parent
+ATTACH_DIR = REPO_ROOT / 'attachment'
+OUTPUT_DIR = Q_DIR / 'output'
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
+
 import numpy as np
 from scipy.optimize import linprog
 import xlsx_reader as xr
 
-# ---------------- 数据读取 ----------------
-rows = xr.read_sheet_rows('attachment/附件1.xlsx')['Sheet1']
+rows = xr.read_sheet_rows(str(ATTACH_DIR / '附件1.xlsx'))['Sheet1']
 # 表头: 时间, 电价, 小区负载, 光伏发电预测功率
 header = rows[0]
 data = rows[1:]          # 144 行, 对应 144 个 10 分钟区间
@@ -38,7 +50,7 @@ def parse_time(t):
     hh, mm = s.split(':')
     return int(hh) * 60 + int(mm) + offset
 
-t_min = np.array([parse_time(r[0]) for r in data], dtype=float)   # 各区间结束时刻(分钟)
+t_min = np.array([parse_time(r[0]) for r in data], dtype=float)   # 原始时间列: 0:10,0:20,...,24:00
 price = np.array([float(r[1]) for r in data])                     # 元/kWh
 load_kw  = np.array([float(r[2]) for r in data])                  # kW
 pv_kw    = np.array([float(r[3]) for r in data])                  # kW
@@ -47,11 +59,20 @@ pv_kw    = np.array([float(r[3]) for r in data])                  # kW
 assert t_min[0] == 10 and t_min[-1] == 1440, (t_min[0], t_min[-1])
 assert np.all(np.diff(t_min) == 10), "时间步长应为 10 分钟"
 
+# ---- 时间口径：附件时间戳 = 区间起点，且数据周期循环 ----
+# 末行 "0:00+1"(=24:00) 即次日 0:00 = 当日 0:00（"每天电价和负载相同"，逐日循环）。
+# 循环右移 1 格，使下标 k 直接对应时钟区间 [10k, 10(k+1)] 分钟：
+#   下标 0 = [0:00,0:10]（复用末行数据）；下标 1 = [0:10,0:20]（原首行）；…；下标 143 = [23:50,24:00]。
+t_min   = np.roll(t_min, 1) % 1440    # 24:00 -> 0:00
+price   = np.roll(price, 1)
+load_kw = np.roll(load_kw, 1)
+pv_kw   = np.roll(pv_kw, 1)
+
 DT = 1 / 6.0                       # 区间长度 = 10 min = 1/6 h
 L = load_kw * DT                   # 负载能量 kWh/区间
 G = pv_kw * DT                     # 光伏能量 kWh/区间
 
-# ---------------- 参数 ----------------
+# 参数
 N = 144                            # 区间数
 eta_c = 0.9                        # 充电效率
 eta_d = 0.9                        # 放电效率
@@ -60,7 +81,7 @@ P_max = 5000.0                     # kW
 C_max = P_max * DT                 # 每区间最大充/放电能量 (kWh) = 833.333
 E0 = 6000.0                        # 0:00 储电量
 
-# ---------------- 决策变量 ----------------
+# 决策变量
 # 每区间 t: x[t](购电), c[t](充电量), d[t](放电量), w[t](弃光量)   (均为 kWh)
 # 储能状态 E[t], t=0..N (E[0] 为 0:00, E[N] 为 24:00), 共 N+1 个
 nv_x = N; nv_c = N; nv_d = N; nv_w = N; nv_E = N + 1
@@ -76,7 +97,7 @@ c_obj = np.zeros(n_vars)
 for t in range(N):
     c_obj[ix(t)] = price[t]
 
-# ---------------- 约束: A_ub x <= b_ub , A_eq x == b_eq ----------------
+# 约束: A_ub x <= b_ub , A_eq x == b_eq
 A_ub, b_ub = [], []
 A_eq, b_eq = [], []
 
@@ -85,7 +106,7 @@ def add_eq(row, rhs):
 def add_ub(row, rhs):
     A_ub.append(row); b_ub.append(rhs)
 
-# (1) 母线功率平衡: x_t + G_t + d_t - c_t - w_t = L_t   (购电+光伏+放电 = 负载+充电+弃光)
+# 母线功率平衡: x_t + G_t + d_t - c_t - w_t = L_t   (购电+光伏+放电 = 负载+充电+弃光)
 for t in range(N):
     row = np.zeros(n_vars)
     row[ix(t)] = 1.0
@@ -94,7 +115,7 @@ for t in range(N):
     row[iw(t)] = -1.0
     add_eq(row, L[t] - G[t])
 
-# (2) 储能动态: E_{t+1} = E_t + η_c·c_t − d_t/η_d
+# 储能动态: E_{t+1} = E_t + η_c·c_t − d_t/η_d
 for t in range(N):
     row = np.zeros(n_vars)
     row[iE(t+1)] = 1.0
@@ -103,18 +124,18 @@ for t in range(N):
     row[id_(t)]  = 1.0 / eta_d
     add_eq(row, 0.0)
 
-# (3) 储能电量上下限: E_min <= E_t <= E_max  (t=0..N)
+# 储能电量上下限: E_min <= E_t <= E_max  (t=0..N)
 for t in range(N + 1):
     row = np.zeros(n_vars); row[iE(t)] = 1.0
     add_ub(row, E_max)
     row = np.zeros(n_vars); row[iE(t)] = -1.0
     add_ub(row, -E_min)
 
-# (4) 边界条件: E[0] = E0, E[N] = E0  (0:00 与 24:00 储电量相同)
+# 边界条件: E[0] = E0, E[N] = E0  (0:00 与 24:00 储电量相同)
 row = np.zeros(n_vars); row[iE(0)] = 1.0; add_eq(row, E0)
 row = np.zeros(n_vars); row[iE(N)] = 1.0; add_eq(row, E0)
 
-# (5) 变量上下界
+# 变量上下界
 lb = np.zeros(n_vars)
 ub = np.full(n_vars, np.inf)
 for t in range(N):
@@ -125,7 +146,7 @@ for t in range(N + 1):
     ub[iE(t)] = np.inf
 # x, w 下界 0, 上界 inf (已由 lb=0 保证)
 
-# ---------------- 求解 ----------------
+# 求解
 res = linprog(c_obj, A_ub=np.array(A_ub), b_ub=np.array(b_ub),
               A_eq=np.array(A_eq), b_eq=np.array(b_eq),
               bounds=list(zip(lb, ub)), method='highs')
@@ -141,7 +162,7 @@ d_sol = res.x[id_(0):id_(N-1)+1]
 w_sol = res.x[iw(0):iw(N-1)+1]
 E_sol = res.x[iE(0):iE(N)+1]
 
-# ---------------- 校验 ----------------
+# 校验
 def report():
     bal = x_sol + G + d_sol - c_sol - w_sol - L
     print('\n=== 校验 ===')
@@ -156,7 +177,7 @@ def report():
 report()
 
 # 保存供后续步骤使用
-np.savez('output/prob1_solution.npz', t_min=t_min, price=price, load_kw=load_kw,
-         pv_kw=pv_kw, L=L, G=G, x=x_sol, c=c_sol, d=d_sol, w=w_sol, E=E_sol,
-         cost=res.fun)
-print('\n已保存 output/prob1_solution.npz')
+np.savez(str(OUTPUT_DIR / 'prob1_solution.npz'), t_min=t_min, price=price,
+         load_kw=load_kw, pv_kw=pv_kw, L=L, G=G, x=x_sol, c=c_sol, d=d_sol,
+         w=w_sol, E=E_sol, cost=res.fun)
+print(f'\n已保存 {OUTPUT_DIR / "prob1_solution.npz"}')

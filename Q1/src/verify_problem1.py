@@ -13,6 +13,19 @@
 5. 复核报告表 1/表 2 的数值，并校验 result1.xlsx 中的填写位置。
 """
 
+import sys
+from pathlib import Path
+
+# 路径
+SRC_DIR = Path(__file__).resolve().parent        
+Q_DIR = SRC_DIR.parent
+REPO_ROOT = Q_DIR.parent
+ATTACH_DIR = REPO_ROOT / 'attachment'
+OUTPUT_DIR = Q_DIR / 'output'
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
+
 import numpy as np
 from scipy.optimize import linprog
 
@@ -23,7 +36,7 @@ TOL = 1e-6
 
 
 def read_data():
-    rows = xr.read_sheet_rows("attachment/附件1.xlsx")["Sheet1"]
+    rows = xr.read_sheet_rows(str(ATTACH_DIR / '附件1.xlsx'))["Sheet1"]
     data = rows[1:]
     assert len(data) == 144, f"期望 144 个区间, 实际 {len(data)}"
 
@@ -47,6 +60,13 @@ def read_data():
 
     assert t_min[0] == 10 and t_min[-1] == 1440
     assert np.all(np.diff(t_min) == 10)
+
+    # 附件时间戳 = 区间起点，且数据周期循环：末行 "0:00+1"(24:00) = 当日 0:00。
+    # 循环右移 1，使下标 k 对应时钟区间 [10k,10(k+1)]；下标0=[0:00,0:10]（复用末行）。
+    t_min = np.roll(t_min, 1) % 1440
+    price = np.roll(price, 1)
+    load_kw = np.roll(load_kw, 1)
+    pv_kw = np.roll(pv_kw, 1)
 
     dt = 1.0 / 6.0
     L = load_kw * dt
@@ -288,27 +308,27 @@ def check_tables(x, c, d, E, cost):
     expected_spec = {name: x[k] for name, k in spec}
     report_spec = {
         "10:00-10:10": 0.00,
-        "12:00-12:10": 480.41,
+        "12:00-12:10": 486.40,
         "14:00-14:10": 0.00,
-        "16:00-16:10": 445.43,
-        "18:00-18:10": 531.89,
+        "16:00-16:10": 394.93,
+        "18:00-18:10": 636.98,
         "20:00-20:10": 0.00,
     }
     max_diff = max(abs(expected_spec[k] - v) for k, v in report_spec.items())
     print(f"  [{'PASS' if max_diff < 0.01 else 'FAIL'}] 表 1 数值与重算最大误差: {max_diff:.4f}")
     print(f"  [{'PASS' if abs(x.sum() - 59482.70) < 0.01 else 'FAIL'}] 全天购电量: {x.sum():.4f}")
-    print(f"  [{'PASS' if abs(cost - 35126.95) < 0.01 else 'FAIL'}] 全天购电费: {cost:.4f}")
+    print(f"  [{'PASS' if abs(cost - 35126.85) < 0.01 else 'FAIL'}] 全天购电费: {cost:.4f}")
 
     expected_blocks = []
     for name, a, b in blocks:
         expected_blocks.append((c[a:b].sum(), d[a:b].sum()))
     report_blocks = [
         (4500.00, 0.00),
-        (833.33, 6365.84),
-        (4787.96, 1703.00),
-        (5286.04, 91.10),
-        (0.00, 5780.13),
-        (5333.33, 2859.87),
+        (833.33, 5947.42),
+        (3954.63, 2121.42),
+        (6119.37, 91.10),
+        (0.00, 5068.69),
+        (5333.33, 3571.31),
     ]
     max_cd = max(
         max(abs(e[0] - r[0]), abs(e[1] - r[1]))
@@ -321,7 +341,7 @@ def check_tables(x, c, d, E, cost):
 
 def check_result_file(x, c, d, E):
     try:
-        sheets = xr.read_sheet_rows("result1.xlsx")
+        sheets = xr.read_sheet_rows(str(OUTPUT_DIR / 'result1.xlsx'))
         names = list(sheets)
         plan = sheets[names[0]]
         charge = sheets[names[1]]
@@ -329,7 +349,7 @@ def check_result_file(x, c, d, E):
         for row in plan[1:145]:
             numeric.append(row[1] if len(row) > 1 else None)
         if len(numeric) == len(x) and all(v is not None for v in numeric):
-            diff = np.max(np.abs(np.array(numeric, dtype=float) - x))
+            diff = np.max(np.abs(np.array(numeric, dtype=float) - np.roll(x, -1)))
             print(f"  [{'PASS' if diff <= 1e-4 else 'FAIL'}] result1.xlsx 购电量与重算最大误差: {diff:.3e}")
         else:
             print("  [FAIL] result1.xlsx 购电量行数或空值异常")

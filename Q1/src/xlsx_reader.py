@@ -96,7 +96,7 @@ def dump_sheet(path, sheet=None, max_rows=None, max_cols=None):
     for name, rows in data.items():
         if sheet is not None and name != sheet:
             continue
-        print(f'===== SHEET: {name}  ({len(rows)} rows) =====')
+        print(f'SHEET: {name}  ({len(rows)} rows)')
         for i, r in enumerate(rows):
             if max_rows is not None and i >= max_rows:
                 print('   ... (truncated)')
