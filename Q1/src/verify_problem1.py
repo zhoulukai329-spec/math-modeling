@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 问题 1 模型检验脚本（独立于 solve_problem1.py 重算，并做 KKT 认证）
 

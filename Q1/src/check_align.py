@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """核对 result1.xlsx 与附件5模板的对齐情况（结构 + 数值语义）。"""
 import sys
 from pathlib import Path

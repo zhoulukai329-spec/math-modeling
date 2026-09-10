@@ -2,23 +2,20 @@
 import sys
 from pathlib import Path
 
-# ===== 自包含路径解析（Q1/Q2/Q3/Q4 通用，直接复制到各小题脚本即可）=====
-SRC_DIR = Path(__file__).resolve().parent        # <repo>/Q*/src
-Q_DIR = SRC_DIR.parent                            # <repo>/Q*
-REPO_ROOT = Q_DIR.parent                          # <repo>
-ATTACH_DIR = REPO_ROOT / 'attachment'             # 附件目录
-OUTPUT_DIR = Q_DIR / 'output'                     # 本小题输出目录
+SRC_DIR = Path(__file__).resolve().parent
+Q_DIR = SRC_DIR.parent
+REPO_ROOT = Q_DIR.parent
+ATTACH_DIR = REPO_ROOT / 'attachment'
+OUTPUT_DIR = Q_DIR / 'output'
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
-# =========================================================================
 
 import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
-# 中文字体
 for f in ['Microsoft YaHei', 'SimHei', 'SimSun', 'Arial Unicode MS']:
     try:
         matplotlib.font_manager.findfont(f, fallback_to_default=False)
