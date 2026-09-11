@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "dates": [
+    "2025-02-01"
+  ],
+  "executed_steps": 37,
+  "selected_steps": 144,
+  "complete": false,
+  "costs": {
+    "baseline": 36112.27435560076,
+    "revision_up": 4906.290447738141,
+    "revision_down": 0.0,
+    "emergency": 0.0
+  },
+  "total_cost": 41018.5648033389,
+  "elapsed_seconds": 3.6389112000033492,
+  "solve_count": 39,
+  "optimal_solve_count": 39,
+  "config": {
+    "attachment_dir": "D:\\-\\attachment",
+    "horizon_steps": 6,
+    "max_steps": 37,
+    "n_scenarios": 2,
+    "lookback_days": 28,
+    "seed": 2025,
+    "deterministic": false,
+    "january_warmup": true,
+    "revision_hours": [
+      6,
+      12,
+      18
+    ],
+    "initial_soc": 6000,
+    "soc_min": 1200.0,
+    "soc_max": 10800.0,
+    "charge_limit": 833.3333333333334,
+    "discharge_limit": 833.3333333333334,
+    "charge_efficiency": 0.9,
+    "discharge_efficiency": 0.9,
+    "terminal_soc": 6000.0,
+    "terminal_penalty": 0.1,
+    "throughput_penalty": 1e-06,
+    "cvar_weight": 0.0,
+    "cvar_alpha": 0.9,
+    "time_limit": 10.0,
+    "mip_rel_gap": 0.0001
+  },
+  "final_soc": 6001.241185185185,
+  "cost_scope": "Full issued commitments and adjacent-version fees; emergency only for executed steps.",
+  "calibration": "Explicit configuration; no calibration inferred from this result."
+}

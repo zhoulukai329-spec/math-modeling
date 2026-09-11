@@ -1,0 +1,32 @@
+{
+  "passed": true,
+  "errors": [],
+  "residuals": {
+    "energy balance": 1.5916157281026244e-12,
+    "SOC dynamics": 0.0,
+    "SOC initial": 0.0,
+    "SOC continuity": 0.0,
+    "version baseline mismatch": 0.0,
+    "version upward delta": 0.0,
+    "version downward delta": 0.0,
+    "version baseline cost": 0.0,
+    "version up cost": 0.0,
+    "version down cost": 0.0,
+    "version frozen past": 0.0,
+    "version final cumulative commitment": 0.0,
+    "cash cost baseline": 0.0,
+    "cash cost revision_up": 0.0,
+    "cash cost revision_down": 0.0,
+    "cash cost emergency": 0.0,
+    "execution initial SOC": 0.0
+  },
+  "recomputed_costs": {
+    "baseline": 43500.63154814557,
+    "revision_up": 0.0,
+    "revision_down": 0.0,
+    "emergency": 0.0
+  },
+  "executed_steps": 144,
+  "complete": true,
+  "causality_scope": "Publication clocks, observation flags, one common action per execution, unknown future actuals. Saved summaries cannot prove all forecast/scenario inputs; future-actual perturbation is tested separately."
+}
