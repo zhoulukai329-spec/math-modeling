@@ -57,14 +57,23 @@ print(f'  {"0:00 储电量":12s} = {E[0]:10.4f} kWh')
 print(f'  {"24:00 储电量":12s} = {E[-1]:10.4f} kWh')
 
 # 基线：无储能
-x_base = np.maximum(0.0, L - G)      # 无储能时每区间购电量 = max(0, 净负载)
+x_base = np.maximum(0.0, L - G)          # 无储能时每区间购电量 = max(0, 净负载)
+w_base = np.maximum(0.0, G - L)          # 无储能时弃光量   = max(0, 光伏富余)
 cost_base = float((price * x_base).sum())
+saving = cost_base - cost
+save_rate = saving / cost_base * 100
 print('\n' + '=' * 70)
 print('基线对比（无储能）')
 print('=' * 70)
 print(f'  无储能全天购电量 = {x_base.sum():.4f} kWh,  购电费 = {cost_base:.4f} 元')
+print(f'  无储能弃光量     = {w_base.sum():.4f} kWh '
+      f'({w_base.sum()/G.sum()*100:.2f}% 光伏), 弃光区间数 = {(w_base > 1e-6).sum()}')
 print(f'  有储能全天购电量 = {x.sum():.4f} kWh,  购电费 = {cost:.4f} 元')
-print(f'  储能节省购电费   = {cost_base - cost:.4f} 元 ({(cost_base-cost)/cost_base*100:.2f}%)')
+print(f'  有储能弃光量     = {w.sum():.6f} kWh')
+print(f'  储能节省购电费   = {saving:.4f} 元 (节费率 {save_rate:.2f}%)')
+print(f'  弃光量削减       = {w_base.sum() - w.sum():.4f} kWh')
+print(f'  能量闭环校验: 弃光削减 - 购电减少 = {(w_base.sum()-w.sum()) - (x_base.sum()-x.sum()):.4f} kWh'
+      f'  ≈ 储能净损耗 {c.sum()-dd.sum():.4f} kWh')
 
 # 填写 result1.xlsx
 def fill_cell(row_el, col_letter, value):
