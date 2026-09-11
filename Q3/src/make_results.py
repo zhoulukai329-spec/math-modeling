@@ -1,4 +1,4 @@
-"""Preserve the official template; persist actual trajectories and full ledgers."""
+﻿"""Preserve the official template; persist actual trajectories and full ledgers."""
 from __future__ import annotations
 
 import csv

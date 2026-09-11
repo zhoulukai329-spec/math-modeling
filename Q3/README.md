@@ -1,4 +1,4 @@
-# 问题 3：十分钟滚动场景 MPC-MILP
+﻿# 问题 3：十分钟滚动场景 MPC-MILP
 
 从仓库根目录运行。依赖 Python、NumPy、SciPy（支持 `optimize.milp`）、openpyxl；测试使用 pytest。
 附件保持只读。每个实际十分钟步都解 MILP，只执行当前场景共同动作，SOC 连续传递。

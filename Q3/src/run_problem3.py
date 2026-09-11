@@ -1,4 +1,4 @@
-"""Question 3 real-attachment rolling MILP command line."""
+﻿"""Question 3 real-attachment rolling MILP command line."""
 from __future__ import annotations
 
 import argparse

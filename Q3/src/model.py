@@ -1,4 +1,4 @@
-"""Sparse two-stage scenario MPC-MILP, with interval energies already in kWh.
+﻿"""Sparse two-stage scenario MPC-MILP, with interval energies already in kWh.
 
 Procurement is common for the whole horizon. Current operation is common,
 while future operation is scenario recourse. CVaR concerns procurement plus

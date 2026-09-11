@@ -1,4 +1,4 @@
-"""Evaluate terminal weights using January only; save verifiable evidence."""
+﻿"""Evaluate terminal weights using January only; save verifiable evidence."""
 from dataclasses import replace
 import hashlib
 import json

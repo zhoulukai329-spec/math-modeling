@@ -1,4 +1,4 @@
-﻿operating_date,timestamp,executed,baseline,final_commitment,load_energy,pv_energy,price,charge,discharge,emergency,spill,mode,soc_before,soc_after
+﻿﻿operating_date,timestamp,executed,baseline,final_commitment,load_energy,pv_energy,price,charge,discharge,emergency,spill,mode,soc_before,soc_after
 2025-02-01,2025-02-01T00:10:00,True,556.5834543010751,556.5834543010751,422.0303666666667,0.0,0.3281,0.0,0.0,0.0,134.55308763440843,0.0,6000.0,6000.0
 2025-02-01,2025-02-01T00:20:00,True,895.339758064516,895.339758064516,415.4073166666667,0.0,0.3257,0.0,0.0,0.0,479.9324413978493,0.0,6000.0,6000.0
 2025-02-01,2025-02-01T00:30:00,True,1400.757419354839,1400.757419354839,410.7166666666667,0.0,0.3041,0.0,0.0,0.0,990.0407526881722,0.0,6000.0,6000.0

@@ -1,0 +1,158 @@
+{
+  "frozen": true,
+  "training_start": "2025-01-01",
+  "training_end": "2025-01-31",
+  "parameters": {
+    "terminal_penalty": 0.0,
+    "terminal_soc": 6000.0,
+    "terminal_salvage": 0.726615,
+    "cvar_weight": 0.0,
+    "cvar_alpha": 0.9
+  },
+  "trials": [
+    {
+      "parameters": {
+        "terminal_penalty": 0.0,
+        "terminal_soc": 6000.0,
+        "terminal_salvage": 0.726615,
+        "cvar_weight": 0.0,
+        "cvar_alpha": 0.9
+      },
+      "cash_cost": 2872682.058304417,
+      "score": 2864834.616304417,
+      "final_soc": 10799.999999999975,
+      "executed_steps": 4464,
+      "verification": {
+        "passed": true,
+        "errors": [],
+        "residuals": {
+          "energy balance": 3.296918293926865e-12,
+          "SOC dynamics": 1.8189894035458565e-12,
+          "SOC initial": 0.0,
+          "SOC continuity": 0.0,
+          "version baseline mismatch": 0.0,
+          "version upward delta": 0.0,
+          "version downward delta": 0.0,
+          "version baseline cost": 0.0,
+          "version up cost": 0.0,
+          "version down cost": 0.0,
+          "version frozen past": 0.0,
+          "version final cumulative commitment": 0.0,
+          "cash cost baseline": 0.0,
+          "cash cost revision_up": 0.0,
+          "cash cost revision_down": 0.0,
+          "cash cost emergency": 0.0,
+          "execution initial SOC": 0.0
+        },
+        "recomputed_costs": {
+          "baseline": 1483248.5351522472,
+          "revision_up": 97742.51728927414,
+          "revision_down": 0.0,
+          "emergency": 1291691.0058628959
+        },
+        "executed_steps": 4464,
+        "complete": true,
+        "causality_scope": "Publication clocks, observation flags, one common action per execution, unknown future actuals. Saved summaries cannot prove all forecast/scenario inputs; future-actual perturbation is tested separately."
+      },
+      "solution": "D:\\-\\Q3\\output\\calibration\\cvar_0\\january_solution.npz",
+      "sha256": "547852f4b08053ae13b9ec60dbf1827a06192d29d28a2b10197100f3e6e0d1b5"
+    },
+    {
+      "parameters": {
+        "terminal_penalty": 0.0,
+        "terminal_soc": 6000.0,
+        "terminal_salvage": 0.726615,
+        "cvar_weight": 0.05,
+        "cvar_alpha": 0.9
+      },
+      "cash_cost": 2872684.5578348734,
+      "score": 2864837.1158348736,
+      "final_soc": 10799.999999999975,
+      "executed_steps": 4464,
+      "verification": {
+        "passed": true,
+        "errors": [],
+        "residuals": {
+          "energy balance": 3.296918293926865e-12,
+          "SOC dynamics": 1.8189894035458565e-12,
+          "SOC initial": 0.0,
+          "SOC continuity": 0.0,
+          "version baseline mismatch": 0.0,
+          "version upward delta": 0.0,
+          "version downward delta": 0.0,
+          "version baseline cost": 0.0,
+          "version up cost": 0.0,
+          "version down cost": 0.0,
+          "version frozen past": 0.0,
+          "version final cumulative commitment": 0.0,
+          "cash cost baseline": 0.0,
+          "cash cost revision_up": 1.4551915228366852e-11,
+          "cash cost revision_down": 0.0,
+          "cash cost emergency": 0.0,
+          "execution initial SOC": 0.0
+        },
+        "recomputed_costs": {
+          "baseline": 1483251.0346827037,
+          "revision_up": 97742.51728927414,
+          "revision_down": 0.0,
+          "emergency": 1291691.0058628959
+        },
+        "executed_steps": 4464,
+        "complete": true,
+        "causality_scope": "Publication clocks, observation flags, one common action per execution, unknown future actuals. Saved summaries cannot prove all forecast/scenario inputs; future-actual perturbation is tested separately."
+      },
+      "solution": "D:\\-\\Q3\\output\\calibration\\cvar_0.05\\january_solution.npz",
+      "sha256": "ef516ae71a607611acf92c788c38f4c03707327fa3822f26e00c8cfa9bf95bc6"
+    },
+    {
+      "parameters": {
+        "terminal_penalty": 0.0,
+        "terminal_soc": 6000.0,
+        "terminal_salvage": 0.726615,
+        "cvar_weight": 0.1,
+        "cvar_alpha": 0.9
+      },
+      "cash_cost": 2872684.5578348734,
+      "score": 2864837.1158348736,
+      "final_soc": 10799.999999999975,
+      "executed_steps": 4464,
+      "verification": {
+        "passed": true,
+        "errors": [],
+        "residuals": {
+          "energy balance": 3.296918293926865e-12,
+          "SOC dynamics": 1.8189894035458565e-12,
+          "SOC initial": 0.0,
+          "SOC continuity": 0.0,
+          "version baseline mismatch": 0.0,
+          "version upward delta": 0.0,
+          "version downward delta": 0.0,
+          "version baseline cost": 0.0,
+          "version up cost": 0.0,
+          "version down cost": 0.0,
+          "version frozen past": 0.0,
+          "version final cumulative commitment": 0.0,
+          "cash cost baseline": 0.0,
+          "cash cost revision_up": 1.4551915228366852e-11,
+          "cash cost revision_down": 0.0,
+          "cash cost emergency": 0.0,
+          "execution initial SOC": 0.0
+        },
+        "recomputed_costs": {
+          "baseline": 1483251.0346827037,
+          "revision_up": 97742.51728927414,
+          "revision_down": 0.0,
+          "emergency": 1291691.0058628959
+        },
+        "executed_steps": 4464,
+        "complete": true,
+        "causality_scope": "Publication clocks, observation flags, one common action per execution, unknown future actuals. Saved summaries cannot prove all forecast/scenario inputs; future-actual perturbation is tested separately."
+      },
+      "solution": "D:\\-\\Q3\\output\\calibration\\cvar_0.1\\january_solution.npz",
+      "sha256": "126c4033bc47169ad514976a4dee697ca79fa17216d928653141bf1d33b983a9"
+    }
+  ],
+  "horizon_steps": 144,
+  "selection": "Minimum January cash cost less final SOC valued at median tariff times discharge efficiency.",
+  "scope": "Terminal SOC is valued by salvage and CVaR weight is selected on January scenarios."
+}

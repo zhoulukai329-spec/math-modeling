@@ -1,4 +1,4 @@
-"""Small physical and economic oracles for the scenario MILP."""
+﻿"""Small physical and economic oracles for the scenario MILP."""
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace

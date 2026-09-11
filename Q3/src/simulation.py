@@ -1,4 +1,4 @@
-"""Causal ten-minute MPC execution and version-to-version cash settlement.
+﻿"""Causal ten-minute MPC execution and version-to-version cash settlement.
 
 Rows retain the attachment's 00:10 ... next-day 00:00 left endpoints.
 At midnight the new row's baseline is planned while the old row's tail stays
