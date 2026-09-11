@@ -24,11 +24,12 @@ import optimization as opt
 
 
 OUTPUT_START_DAY = 31  # 2025-02-01 的索引（0 基；0 = 2025-01-01）
-N_SCENARIOS = 6
+N_SCENARIOS = 12
 LOOKBACK = 28
 
 
-def simulate_days(net, price, f, r, n_scenarios=N_SCENARIOS, lookback=LOOKBACK,
+def simulate_days(net, price, f, load_resid, pv_resid,
+                  n_scenarios=N_SCENARIOS, lookback=LOOKBACK,
                   seed=2025, E_start=dio.E0_START, v_terminal=None,
                   start_day=0, end_day=None):
     """逐日运行两阶段随机线性规划并回测。
@@ -36,8 +37,9 @@ def simulate_days(net, price, f, r, n_scenarios=N_SCENARIOS, lookback=LOOKBACK,
     参数:
       net:        (D,144) 全年实际净负荷能量 (kWh)
       price:      (144,) 日内电价 (元/kWh)
-      f:          因果点预测 (D,144)
-      r:          因果残差 (D,144)
+      f:           净负荷因果点预测 (D,144)
+      load_resid:  负载因果残差 (D,144)
+      pv_resid:    光伏因果残差 (D,144)
       n_scenarios: 场景数
       lookback:    残差场景池回看窗口
       seed:        确定性抽样种子
@@ -78,12 +80,11 @@ def simulate_days(net, price, f, r, n_scenarios=N_SCENARIOS, lookback=LOOKBACK,
             print(f"    处理日期索引 {day}/{D-1}", flush=True)
 
         scenarios = fc.scenarios_for_day(
-            day, net, f, r, n_scenarios=n_scenarios, lookback=lookback, seed=seed
+            day, f, load_resid, pv_resid,
+            n_scenarios=n_scenarios, lookback=lookback, seed=seed,
         )
         g, first = opt.build_first_stage(price, scenarios, E_cur, v_terminal)
-        c, d_act, w, e, E, second = opt.build_second_stage(
-            price, net[day], g, E_cur, v_terminal
-        )
+        c, d_act, w, e, E = opt.causal_dispatch(net[day], g, E_cur)
 
         g_all[day] = g
         c_all[day] = c
@@ -97,7 +98,7 @@ def simulate_days(net, price, f, r, n_scenarios=N_SCENARIOS, lookback=LOOKBACK,
         total_cost[day] = planned_cost[day] + emergency_cost[day]
         first_obj[day] = first["objective"]
         first_expected_emergency[day] = first["stats"].get("expected_emergency", 0.0)
-        solve_status.append(second.status)
+        solve_status.append(first["status"])
 
         E_cur = float(E[-1])
 
@@ -122,9 +123,12 @@ def main():
 
     price, load_typical_kw, pv_typical_kw = dio.read_price_typical()
     dates, net, load, pv = dio.read_actual_data()
-    typical_net = (load_typical_kw - pv_typical_kw) * dio.DT
+    typical_load = load_typical_kw * dio.DT
+    typical_pv = pv_typical_kw * dio.DT
 
-    f, r = fc.build_causal_forecasts(net, typical_net)
+    f, r, load_hat, pv_hat, load_resid, pv_resid = fc.build_causal_forecasts(
+        load, pv, typical_load, typical_pv
+    )
     v_terminal = dio.terminal_value(price)
 
     D = net.shape[0]
@@ -133,7 +137,8 @@ def main():
     print("问题 2 逐日两阶段随机规划回测")
     print("=" * 70)
     sim = simulate_days(
-        net, price, f, r, n_scenarios=N_SCENARIOS, lookback=LOOKBACK,
+        net, price, f, load_resid, pv_resid,
+        n_scenarios=N_SCENARIOS, lookback=LOOKBACK,
         seed=2025, E_start=dio.E0_START, v_terminal=v_terminal,
     )
     print(f"\n全年回测完成，用时 {time.time() - t0:.1f} s")

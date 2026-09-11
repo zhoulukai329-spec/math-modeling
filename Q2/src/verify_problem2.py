@@ -86,21 +86,48 @@ def check_continuity_and_cost(z):
 def check_causality():
     price, load_kw, pv_kw = dio.read_price_typical()
     dates, net, load, pv = dio.read_actual_data()
-    typical_net = (load_kw - pv_kw) * dio.DT
-    f, r = fc.build_causal_forecasts(net, typical_net)
+    typical_load = load_kw * dio.DT
+    typical_pv = pv_kw * dio.DT
+    f, r, load_hat, pv_hat, load_resid, pv_resid = fc.build_causal_forecasts(
+        load, pv, typical_load, typical_pv
+    )
     ok = True
     print("\n[3] 预测因果性抽查")
     for d in [31, 100, 200, 300, 364]:
-        # 场景生成只能使用 <d 的历史；这里检查点预测不引用未来行。
+        # 场景生成只能使用 <d 的历史；这里检查负载/光伏点预测不引用未来行。
         if d == 0:
-            ok &= np.allclose(f[d], typical_net)
+            ok &= np.allclose(load_hat[d], typical_load)
+            ok &= np.allclose(pv_hat[d], typical_pv)
         elif d < 7:
-            ok &= np.allclose(f[d], net[:d].mean(axis=0))
+            ok &= np.allclose(load_hat[d], load[:d].mean(axis=0))
+            ok &= np.allclose(pv_hat[d], pv[:d].mean(axis=0))
         else:
-            ok &= np.allclose(f[d], net[d - 7])
-        sc = fc.scenarios_for_day(d, net, f, r, n_scenarios=4, lookback=14, seed=7)
+            ok &= np.allclose(load_hat[d], load[d - 7])
+            ok &= np.allclose(pv_hat[d], pv[d - 7])
+        sc = fc.scenarios_for_day(d, f, load_resid, pv_resid,
+                                  n_scenarios=4, lookback=14, seed=7)
         ok &= np.isfinite(sc).all()
-    print(f"  [{'PASS' if ok else 'FAIL'}] 点预测仅用历史，场景生成无 NaN/Inf")
+    print(f"  [{'PASS' if ok else 'FAIL'}] 负载/光伏点预测仅用历史，场景生成无 NaN/Inf")
+    return ok
+
+
+def check_emergency_semantics(z):
+    """语义不变量：紧急购电只弥补当期缺口，禁止给储能充电。"""
+    g, c, e, net = z["g"], z["c"], z["e"], z["net"]
+    tol = 1e-6
+    # 1) 计划购电量 >= 当期净负荷时不应有紧急购电
+    surplus_emergency = int(((g >= net - tol) & (e > tol)).sum())
+    # 2) 紧急购电与充电不应同时发生
+    e_and_c = int(((e > tol) & (c > tol)).sum())
+    # 3) 紧急购电不超过当期缺口 max(0, net - g)
+    deficit = np.maximum(0.0, net - g)
+    over = float(np.max(np.maximum(0.0, e - deficit)))
+    print("\n[5] 紧急购电语义不变量")
+    print(f"  计划>=净负荷仍紧急购电的时段数: {surplus_emergency}")
+    print(f"  紧急购电与充电同时发生的时段数: {e_and_c}")
+    print(f"  紧急购电超过当期缺口的最大量: {over:.3e} kWh")
+    ok = surplus_emergency == 0 and e_and_c == 0 and over <= 1e-4
+    print(f"  [{'PASS' if ok else 'FAIL'}] 紧急购电语义不变量")
     return ok
 
 
@@ -173,8 +200,9 @@ def main():
     ok2 = check_continuity_and_cost(z)
     ok3 = check_causality()
     ok4 = check_xlsx(z)
+    ok5 = check_emergency_semantics(z)
     print("\n" + "=" * 76)
-    if ok1 and ok2 and ok3 and ok4:
+    if ok1 and ok2 and ok3 and ok4 and ok5:
         print("结论: 问题 2 模型检验 PASS。")
     else:
         print("结论: 存在 FAIL 项，请检查模型、数值精度或结果文件。")

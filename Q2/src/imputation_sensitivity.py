@@ -34,23 +34,28 @@ MONTE_CARLO_CSV = dio.OUTPUT_DIR / "monte_carlo_results.csv"
 def _load_context():
     price, load_typ_kw, pv_typ_kw = dio.read_price_typical()
     dates, load_raw, pv_raw = dio._read_attachment2_matrices()
-    typical_net = (load_typ_kw - pv_typ_kw) * dio.DT
+    typical_load = load_typ_kw * dio.DT
+    typical_pv = pv_typ_kw * dio.DT
     v_terminal = dio.terminal_value(price)
-    return price, dates, load_raw, pv_raw, load_typ_kw, typical_net, v_terminal
+    return price, dates, load_raw, pv_raw, load_typ_kw, typical_load, typical_pv, v_terminal
 
 
-def _build_net(load_raw, pv_raw, first_load_kw, first_pv_kw=0.0):
-    """按给定 1 月 1 日 0:00 负荷插补值，用跨日拼接构造全年净负荷。"""
+def _build_load_pv(load_raw, pv_raw, first_load_kw, first_pv_kw=0.0):
+    """按给定 1 月 1 日 0:00 负荷插补值，用跨日拼接构造全年负载/光伏能量(kWh)。"""
     load_kw = dio._align_cross_day(load_raw, first_load_kw)
     pv_kw = dio._align_cross_day(pv_raw, first_pv_kw)
-    return (load_kw - pv_kw) * dio.DT
+    return load_kw * dio.DT, pv_kw * dio.DT
 
 
-def _run_case(price, net, typical_net, v_terminal, label):
-    f, r = fc.build_causal_forecasts(net, typical_net)
+def _run_case(price, load, pv, typical_load, typical_pv, v_terminal, label):
+    net = load - pv
+    f, r, load_hat, pv_hat, load_resid, pv_resid = fc.build_causal_forecasts(
+        load, pv, typical_load, typical_pv
+    )
     print(f"\n—— 运行插补方案：{label} ——")
     sim = simulate_days(
-        net, price, f, r, n_scenarios=N_SCENARIOS, lookback=LOOKBACK,
+        net, price, f, load_resid, pv_resid,
+        n_scenarios=N_SCENARIOS, lookback=LOOKBACK,
         seed=2025, E_start=dio.E0_START, v_terminal=v_terminal,
     )
     mask = np.arange(net.shape[0]) >= OUTPUT_START_DAY
@@ -58,6 +63,8 @@ def _run_case(price, net, typical_net, v_terminal, label):
         "label": label,
         "sim": sim,
         "net": net,
+        "load": load,
+        "pv": pv,
         "total_cost": float(sim["total_cost"][mask].sum()),
         "planned_cost": float(sim["planned_cost"][mask].sum()),
         "emergency_cost": float(sim["emergency_cost"][mask].sum()),
@@ -69,7 +76,7 @@ def _run_case(price, net, typical_net, v_terminal, label):
 
 
 def run_imputation_sensitivity(price, load_raw, pv_raw, load_typ_kw,
-                               typical_net, v_terminal):
+                               typical_load, typical_pv, v_terminal):
     extrap = 2.0 * load_raw[0, 0] - load_raw[0, 1]  # 线性外推 3449.9305
     typical0 = load_typ_kw[0]                        # 附件1 典型 3444.7259
     hold0 = load_raw[0, 0]                           # 向后持有 3529.7296
@@ -89,8 +96,8 @@ def run_imputation_sensitivity(price, load_raw, pv_raw, load_typ_kw,
     results = []
     main_sim = None
     for label, first_load in cases:
-        net = _build_net(load_raw, pv_raw, first_load)
-        r = _run_case(price, net, typical_net, v_terminal, label)
+        load, pv = _build_load_pv(load_raw, pv_raw, first_load)
+        r = _run_case(price, load, pv, typical_load, typical_pv, v_terminal, label)
         results.append(r)
         if main_sim is None:
             main_sim = r
@@ -144,8 +151,12 @@ def run_imputation_sensitivity(price, load_raw, pv_raw, load_typ_kw,
     return main_sim, results
 
 
-def run_residual_monte_carlo(price, net, typical_net, v_terminal, main_sim):
-    f, r = fc.build_causal_forecasts(net, typical_net)
+def run_residual_monte_carlo(price, load, pv, typical_load, typical_pv,
+                             v_terminal, main_sim):
+    net = load - pv
+    f, r, load_hat, pv_hat, load_resid, pv_resid = fc.build_causal_forecasts(
+        load, pv, typical_load, typical_pv
+    )
     day_idx = np.linspace(OUTPUT_START_DAY, net.shape[0] - 1,
                           MONTE_CARLO_N_DAYS, dtype=int)
     print("\n" + "=" * 82)
@@ -160,13 +171,12 @@ def run_residual_monte_carlo(price, net, typical_net, v_terminal, main_sim):
         g = main_sim["sim"]["g"][d]
         E0 = float(main_sim["sim"]["E"][d, 0])
         scenarios = fc.scenarios_for_day(
-            d, net, f, r, n_scenarios=MONTE_CARLO_N_SAMPLES, lookback=LOOKBACK, seed=2025
+            d, f, load_resid, pv_resid,
+            n_scenarios=MONTE_CARLO_N_SAMPLES, lookback=LOOKBACK, seed=2025,
         )
         for s in range(MONTE_CARLO_N_SAMPLES):
-            _c, _d, _w, e, _E, _res = opt.build_second_stage(
-                price, scenarios[s], g, E0, v_terminal
-            )
-            cost = float(np.sum(price * g) + np.sum(dio.EMERGENCY_MULT * price * e))
+            _c, _d, _w, e, _E = opt.causal_dispatch(scenarios[s], g, E0)
+            _p, _em, cost = opt.dispatch_cost(price, g, e)
             all_cost.append(cost)
             all_emergency_kwh.append(float(e.sum()))
 
@@ -191,11 +201,14 @@ def run_residual_monte_carlo(price, net, typical_net, v_terminal, main_sim):
 
 
 def main():
-    price, dates, load_raw, pv_raw, load_typ_kw, typical_net, v_terminal = _load_context()
+    price, dates, load_raw, pv_raw, load_typ_kw, typical_load, typical_pv, v_terminal = _load_context()
     main_sim, results = run_imputation_sensitivity(
-        price, load_raw, pv_raw, load_typ_kw, typical_net, v_terminal
+        price, load_raw, pv_raw, load_typ_kw, typical_load, typical_pv, v_terminal
     )
-    run_residual_monte_carlo(price, main_sim["net"], typical_net, v_terminal, main_sim)
+    run_residual_monte_carlo(
+        price, main_sim["load"], main_sim["pv"],
+        typical_load, typical_pv, v_terminal, main_sim,
+    )
     print("\n插补敏感性检验与蒙特卡洛全部完成。")
 
 

@@ -4,6 +4,7 @@
 从 run_problem2.py 保存的 prob2_solution.npz 读取结果，复制附件 5 的
 result2.xlsx 模板结构，生成完整 334 天结果。
 """
+import re
 import sys
 import zipfile
 from pathlib import Path
@@ -38,36 +39,41 @@ def _col_name(idx):
     return s
 
 
-def _cell_xml(col, row_num, value):
+# 每列数据单元格的样式索引（复用附件 5 模板 cellXfs）：
+# sheet1 计划购电量: 日期(3, 日期格式) + 144 时间(4) + 全天购电量/费(20,20)
+# sheet2 充放电量: 日期(6) 时间段(7) 充电量(7) 放电量(8) 时刻(9) 储电量(7)
+# sheet3 紧急购电量: 日期(6) 时间段(7) 购电量(7)
+SHEET_COL_STYLES = [
+    [3] + [4] * 144 + [20, 20],
+    [6, 7, 7, 8, 9, 7],
+    [6, 7, 7],
+]
+
+
+def _cell_xml(col, row_num, value, style=None):
     ref = f"{_col_name(col)}{row_num}"
+    s_attr = f' s="{style}"' if style is not None else ""
     if value is None:
-        return f'<c r="{ref}"/>'
+        return f'<c r="{ref}"{s_attr}/>'
     if isinstance(value, bool):
-        return f'<c r="{ref}" t="b"><v>{1 if value else 0}</v></c>'
+        return f'<c r="{ref}"{s_attr} t="b"><v>{1 if value else 0}</v></c>'
     if isinstance(value, (int, float, np.integer, np.floating)):
         if isinstance(value, float) and np.isnan(value):
-            return f'<c r="{ref}"/>'
+            return f'<c r="{ref}"{s_attr}/>'
         text = f"{float(value):.6f}".rstrip("0").rstrip(".")
-        return f'<c r="{ref}"><v>{text}</v></c>'
+        return f'<c r="{ref}"{s_attr}><v>{text}</v></c>'
     # 字符串统一用 inlineStr，避免 sharedStrings 索引复杂化
     text = _escape(value)
-    return f'<c r="{ref}" t="inlineStr"><is><t>{text}</t></is></c>'
+    return f'<c r="{ref}"{s_attr} t="inlineStr"><is><t>{text}</t></is></c>'
 
 
-def _row_xml(row_num, values):
+def _data_row_xml(row_num, values, col_styles):
     cells = "".join(
-        _cell_xml(col, row_num, value) for col, value in enumerate(values)
+        _cell_xml(col, row_num, value,
+                  col_styles[col] if col < len(col_styles) else None)
+        for col, value in enumerate(values)
     )
     return f'<row r="{row_num}">{cells}</row>'
-
-
-def _sheet_xml(rows):
-    body = "".join(_row_xml(i + 1, row) for i, row in enumerate(rows))
-    return (
-        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
-        f"<sheetData>{body}</sheetData></worksheet>"
-    )
 
 
 def _fmt_minutes(minutes):
@@ -151,19 +157,41 @@ def build_emergency_rows(dates, e, threshold=1e-7):
     return rows
 
 
+def _build_formatted_sheet(template_xml, rows, col_styles):
+    """保留模板的列宽/样式/冻结窗格与表头行，只替换数据区。"""
+    xml = template_xml.decode("utf-8")
+    start = xml.index("<sheetData>")
+    end = xml.index("</sheetData>") + len("</sheetData>")
+    sheet_data_str = xml[start:end]
+    row_start = sheet_data_str.index("<row ")
+    row_end = sheet_data_str.index("</row>") + len("</row>")
+    header_row = sheet_data_str[row_start:row_end]
+    data_rows_xml = "".join(
+        _data_row_xml(i + 2, values, col_styles)
+        for i, values in enumerate(rows[1:])
+    )
+    new_xml = xml[:start] + f"<sheetData>{header_row}{data_rows_xml}</sheetData>" + xml[end:]
+    n_rows = len(rows)
+    n_cols = len(rows[0]) if rows else 1
+    new_ref = f"A1:{_col_name(n_cols - 1)}{n_rows}"
+    new_xml = re.sub(r'<dimension ref="[^"]*"/>', f'<dimension ref="{new_ref}"/>', new_xml, count=1)
+    return new_xml
+
+
 def write_result_xlsx(sheets):
-    """将三个工作表写入 result2.xlsx，复用附件 5 模板的非工作表文件。"""
+    """将三个工作表写入 result2.xlsx，保留附件 5 模板格式（列宽/样式/表头）。"""
     template = str(dio.TEMPLATE2)
     out = str(dio.RESULT2)
     z_in = zipfile.ZipFile(template, "r")
     z_out = zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED)
-    worksheet_names = ["sheet1.xml", "sheet2.xml", "sheet3.xml"]
+    worksheet_names = ["xl/worksheets/sheet1.xml", "xl/worksheets/sheet2.xml", "xl/worksheets/sheet3.xml"]
     for item in z_in.infolist():
         if item.filename.startswith("xl/worksheets/sheet") and item.filename.endswith(".xml"):
             continue
         z_out.writestr(item, z_in.read(item.filename))
-    for filename, rows in zip(worksheet_names, sheets):
-        z_out.writestr(f"xl/worksheets/{filename}", _sheet_xml(rows))
+    for filename, rows, col_styles in zip(worksheet_names, sheets, SHEET_COL_STYLES):
+        new_xml = _build_formatted_sheet(z_in.read(filename), rows, col_styles)
+        z_out.writestr(filename, new_xml)
     z_in.close()
     z_out.close()
     print(f"结果文件已生成: {out}")

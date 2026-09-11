@@ -10,8 +10,12 @@ python Q2/src/run_problem2.py
 python Q2/src/make_results.py
 python Q2/src/make_figures.py
 python Q2/src/verify_problem2.py
+python Q2/src/robustness.py
 python Q2/src/imputation_sensitivity.py
 ```
+
+> 注：`src/stress_test.py` 已废弃（旧 API），功能由 `robustness.py` 与
+> `imputation_sensitivity.py` 覆盖，请用 `git rm Q2/src/stress_test.py` 删除。
 
 ## 输出
 
@@ -20,5 +24,7 @@ python Q2/src/imputation_sensitivity.py
 - `output/forecast_rolling_metrics.csv`：因果预测滚动检验误差对比
 - `output/imputation_sensitivity.csv`：1 月 1 日 0:00 插补敏感性检验
 - `output/monte_carlo_results.csv`：历史残差块蒙特卡洛结果
+- `output/robustness_scenario_seed.csv`：场景数 × 随机种子稳健性
+- `output/baselines.csv`：同一信息集基准对照（无储能因果 / 确定性点预测 / 随机策略）
 - `output/fig1~fig4.png`：结果图
 - `output/问题2_求解报告.md`：求解报告

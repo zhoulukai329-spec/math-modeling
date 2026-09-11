@@ -7,7 +7,8 @@
   其中 g 为跨场景共享的 here-and-now 决策，储能运行与紧急购电为 wait-and-see 决策。
 
 第二阶段（实际回测）：
-  固定计划 g，用当日实际净负荷重解储能/紧急购电问题，得到实际充放电量、储电量和紧急购电量。
+  固定计划 g，逐时段因果调度（只观察当期实际净负荷与当前储电量），
+  紧急购电只弥补当期缺口、禁止给储能充电，得到实际充放电量、储电量和紧急购电量。
 """
 import numpy as np
 from scipy.optimize import linprog
@@ -19,20 +20,23 @@ from data_io import (
 )
 
 
-def _solve_lp(c, A_eq_coo, b_eq, bounds, label=""):
-    """统一调用 HiGHS，带基本失败检查。"""
-    n_vars = len(c)
-    if A_eq_coo is None or (hasattr(A_eq_coo, "nnz") and A_eq_coo.nnz == 0):
-        A_eq = None
-    else:
-        A_eq = coo_matrix(A_eq_coo).tocsr()
+def _solve_lp(c, A_eq_coo, b_eq, bounds, label="", A_ub_coo=None, b_ub=None,
+              integrality=None):
+    """统一调用 HiGHS，带基本失败检查；支持不等式与整数变量。"""
+
+    def _to_csr(coo):
+        if coo is None or (hasattr(coo, "nnz") and coo.nnz == 0):
+            return None
+        return coo_matrix(coo).tocsr()
+
     res = linprog(
         c,
-        A_ub=None,
-        b_ub=None,
-        A_eq=A_eq,
+        A_ub=_to_csr(A_ub_coo),
+        b_ub=b_ub,
+        A_eq=_to_csr(A_eq_coo),
         b_eq=b_eq,
         bounds=bounds,
+        integrality=integrality,
         method="highs",
     )
     if not res.success:
@@ -41,12 +45,15 @@ def _solve_lp(c, A_eq_coo, b_eq, bounds, label=""):
 
 
 def build_first_stage(price, scenarios, E_start, v_terminal):
-    """构建并求解 0:00 计划购电 LP。
+    """构建并求解 0:00 计划购电 LP（两阶段随机线性规划第一阶段）。
 
     price: (144,) 元/kWh
     scenarios: (S,144) 净负荷场景 kWh
     E_start: 当日 0:00 储电量 kWh
     v_terminal: 24:00 储能量的线性终值系数
+
+    语义约束：引入 0-1 变量 z_{s,t} 表示时段是否处于供电缺口，强制
+    “紧急购电 e 与充电 c 互斥”，从而禁止用紧急购电给储能充电跨时套利。
 
     返回:
       g: (144,) 计划购电量
@@ -54,7 +61,8 @@ def build_first_stage(price, scenarios, E_start, v_terminal):
     """
     S = scenarios.shape[0]
     per = 5 * N + 1  # c(N)+d(N)+w(N)+e(N)+E(N+1)
-    n_vars = N + S * per
+    n_z = S * N
+    n_vars = N + S * per + n_z
 
     g_start = 0
 
@@ -75,6 +83,12 @@ def build_first_stage(price, scenarios, E_start, v_terminal):
 
     def E_idx(s, t):
         return s_start(s) + 4 * N + t
+
+    def z_idx(s, t):
+        return N + S * per + s * N + t
+
+    # 紧急购电上界：e <= 当期缺口 <= max(0, 净负荷)，取一个安全的大 M。
+    M_e = float(max(np.max(scenarios), 0.0)) + C_MAX + 1.0
 
     c_obj = np.zeros(n_vars)
     for t in range(N):
@@ -98,6 +112,10 @@ def build_first_stage(price, scenarios, E_start, v_terminal):
             bounds.append((0.0, None))        # e
         for _t in range(N + 1):
             bounds.append((E_MIN, E_MAX))     # E
+    bounds += [(0.0, 1.0)] * n_z              # z 为 0-1 变量
+
+    integrality = np.zeros(n_vars, dtype=int)
+    integrality[N + S * per:] = 1
 
     rows = []
     cols = []
@@ -115,8 +133,8 @@ def build_first_stage(price, scenarios, E_start, v_terminal):
         row_idx += 1
 
     for s in range(S):
-        base = s_start(s)
         for t in range(N):
+            # 能量平衡：g + e + d - c - w = net
             add_row(
                 [g_start + t, e_idx(s, t), d_idx(s, t), c_idx(s, t), w_idx(s, t)],
                 [1.0, 1.0, 1.0, -1.0, -1.0],
@@ -133,7 +151,31 @@ def build_first_stage(price, scenarios, E_start, v_terminal):
     n_rows = row_idx
     A_eq = coo_matrix((vals, (rows, cols)), shape=(n_rows, n_vars))
 
-    res = _solve_lp(c_obj, A_eq, rhs, bounds, "问题2 第一阶段")
+    # 不等式（语义不变量）：e <= M_e * z 且 c <= C_MAX * (1 - z)。
+    ub_rows = []
+    ub_cols = []
+    ub_vals = []
+    ub_rhs = []
+    ub_idx = 0
+
+    def add_ub(col_indices, coefs, rhs_val):
+        nonlocal ub_idx
+        for col, val in zip(col_indices, coefs):
+            ub_rows.append(ub_idx)
+            ub_cols.append(col)
+            ub_vals.append(val)
+        ub_rhs.append(rhs_val)
+        ub_idx += 1
+
+    for s in range(S):
+        for t in range(N):
+            add_ub([e_idx(s, t), z_idx(s, t)], [1.0, -M_e], 0.0)
+            add_ub([c_idx(s, t), z_idx(s, t)], [1.0, C_MAX], C_MAX)
+
+    A_ub = coo_matrix((ub_vals, (ub_rows, ub_cols)), shape=(ub_idx, n_vars))
+
+    res = _solve_lp(c_obj, A_eq, rhs, bounds, "问题2 第一阶段",
+                    A_ub_coo=A_ub, b_ub=ub_rhs, integrality=integrality)
 
     g = res.x[g_start : g_start + N]
     stats = {}
@@ -149,7 +191,7 @@ def build_first_stage(price, scenarios, E_start, v_terminal):
             "c_mean": np.mean(c_list, axis=0),
             "d_mean": np.mean(d_list, axis=0),
             "E_mean": np.mean(E_list, axis=0),
-            "expected_emergency": float(np.mean([np.sum(price * e) for e in e_list])),
+            "expected_emergency": float(np.mean([np.sum(EMERGENCY_MULT * price * e) for e in e_list])),
         }
 
     result = {
@@ -163,86 +205,44 @@ def build_first_stage(price, scenarios, E_start, v_terminal):
     return g, result
 
 
-def build_second_stage(price, net_actual, g, E_start, v_terminal):
-    """固定计划购电量 g，按当日实际净负荷回测实际运行。
+def causal_dispatch(net_actual, g, E_start):
+    """因果逐时调度（第二阶段真实回测）。
 
-    返回:
-      c,d,w,e: (144,)
-      E: (145,)
-      res: linprog 结果对象
+    固定计划购电量 g，逐时段只用当期实际净负荷 net_actual[t] 与当前储电量，
+    不读取 t 之后的信息，因此不存在前视偏差；同时紧急购电只弥补当期缺口，
+    禁止进入充电链路（杜绝“紧急购电给电池充电、跨时套利”）：
+
+      r = net_actual[t] - g[t]
+      r > 0（缺口）：放电 d = min(r, C_MAX, (E-E_MIN)*ETA_D)；紧急 e = r - d；
+                     充电 c = 0，弃光 w = 0。
+      r <= 0（富余）：充电 c = min(-r, C_MAX, (E_MAX-E)/ETA_C)；弃光 w = -r - c；
+                     放电 d = 0，紧急 e = 0。
+
+    返回 c, d, w, e: (144,)，E: (145,)。构造上保证逐时段能量平衡
+    g + e + d - c - w = net_actual、SOC 动态一致、上下限与非负性成立。
     """
-    per = 5 * N + 1
-    n_vars = per
+    n = len(net_actual)
+    c = np.zeros(n)
+    d = np.zeros(n)
+    w = np.zeros(n)
+    e = np.zeros(n)
+    E = np.zeros(n + 1)
+    E[0] = float(E_start)
+    for t in range(n):
+        r = float(net_actual[t]) - float(g[t])
+        if r > 0.0:
+            d[t] = min(r, C_MAX, (E[t] - E_MIN) * ETA_D)
+            e[t] = r - d[t]
+        else:
+            s = -r
+            c[t] = min(s, C_MAX, (E_MAX - E[t]) / ETA_C)
+            w[t] = s - c[t]
+        E[t + 1] = E[t] + ETA_C * c[t] - d[t] / ETA_D
+    return c, d, w, e, E
 
-    def c_idx(t):
-        return t
 
-    def d_idx(t):
-        return N + t
-
-    def w_idx(t):
-        return 2 * N + t
-
-    def e_idx(t):
-        return 3 * N + t
-
-    def E_idx(t):
-        return 4 * N + t
-
-    c_obj = np.zeros(n_vars)
-    for t in range(N):
-        c_obj[e_idx(t)] = EMERGENCY_MULT * price[t]
-        c_obj[c_idx(t)] = THROUGHPUT_PENALTY
-        c_obj[d_idx(t)] = THROUGHPUT_PENALTY
-    c_obj[E_idx(N)] = -v_terminal
-
-    bounds = []
-    for _t in range(N):
-        bounds.append((0.0, C_MAX))    # c
-    for _t in range(N):
-        bounds.append((0.0, C_MAX))    # d
-    for _t in range(N):
-        bounds.append((0.0, None))     # w
-    for _t in range(N):
-        bounds.append((0.0, None))     # e
-    for _t in range(N + 1):
-        bounds.append((E_MIN, E_MAX))  # E
-
-    rows = []
-    cols = []
-    vals = []
-    rhs = []
-    row_idx = 0
-
-    def add_row(col_indices, coefs, rhs_val):
-        nonlocal row_idx
-        for col, val in zip(col_indices, coefs):
-            rows.append(row_idx)
-            cols.append(col)
-            vals.append(val)
-        rhs.append(rhs_val)
-        row_idx += 1
-
-    for t in range(N):
-        add_row(
-            [e_idx(t), d_idx(t), c_idx(t), w_idx(t)],
-            [1.0, 1.0, -1.0, -1.0],
-            net_actual[t] - g[t],
-        )
-    for t in range(N):
-        add_row(
-            [E_idx(t + 1), E_idx(t), c_idx(t), d_idx(t)],
-            [1.0, -1.0, -ETA_C, 1.0 / ETA_D],
-            0.0,
-        )
-    add_row([E_idx(0)], [1.0], E_start)
-
-    A_eq = coo_matrix((vals, (rows, cols)), shape=(row_idx, n_vars))
-    res = _solve_lp(c_obj, A_eq, rhs, bounds, "问题2 第二阶段")
-
-    c = res.x[c_idx(0) : c_idx(N - 1) + 1]
-    d = res.x[d_idx(0) : d_idx(N - 1) + 1]
-    w = res.x[w_idx(0) : w_idx(N - 1) + 1]
-    e = res.x[e_idx(0) : e_idx(N - 1) + 1]
-    E = res.x[E_idx(0) : E_idx(N) + 1]
-    return c, d, w, e, E, res
+def dispatch_cost(price, g, e):
+    """给定固定计划 g 与紧急购电 e，返回 (计划费, 紧急费, 总费)。"""
+    planned = float(np.sum(price * g))
+    emergency = float(np.sum(EMERGENCY_MULT * price * e))
+    return planned, emergency, planned + emergency
