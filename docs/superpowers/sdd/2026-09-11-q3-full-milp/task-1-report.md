@@ -75,3 +75,48 @@ Read-only real-input check also succeeded:
 - End-of-dataset forecast horizons must remain truncated by the simulator and
   retain terminal-SOC treatment, per the ledger ruling; Task 1 does not invent
   any 2026 data.
+
+## Review-fix round 1
+
+The review correctly identified that a source-row cutoff was not sufficient:
+the final `00:00+1` cell of an earlier operating row has the following
+calendar day's timestamp.  The implementation now constructs a `(D, 144)`
+real-calendar datetime matrix and applies strict `< issue_time` filtering to
+each individual load-history and residual-scenario cell.
+
+Added regression coverage for:
+
+- a midnight issue excluding the prior operating row's `00:00+1` load value;
+- PV residual paths excluding that same target-midnight residual, with PV
+  scenario values clipped at zero;
+- unique `np.arange(144)` markers at 18:00, 23:50, next-day 00:00 and 00:10;
+- temporary XLSX readers preserving the source order/tail column and rejecting
+  price-date mismatch; and
+- strict positive-integer checks for scenario count, lookback and horizon.
+
+Red command/output before the implementation fix:
+
+```powershell
+python -m pytest Q3/tests/test_data_forecast.py -q
+```
+
+```text
+5 failed, 9 passed, 2 errors in 1.02s
+```
+
+The meaningful failures were the midnight load forecast (`5001.0` observed
+instead of `3.0`), target-midnight PV residual leakage (`999.05` observed),
+and missing positive-size validation.  The two temporary-workbook fixture
+errors were repaired by locating test scratch work below `Q3/tests` rather
+than an inaccessible system pytest temporary directory.
+
+Final verification:
+
+```powershell
+python -m pytest Q3/tests/test_data_forecast.py -q
+```
+
+```text
+................                                                         [100%]
+16 passed in 0.50s
+```

@@ -116,6 +116,16 @@ def template_datetimes(operating_day: date | datetime | str) -> tuple[datetime, 
     return tuple(start + timedelta(minutes=int(m)) for m in template_left_endpoint_minutes())
 
 
+def source_datetimes(operating_days: tuple[date, ...] | list[date]) -> np.ndarray:
+    """Return each source cell's true calendar left endpoint, shape ``(D, 144)``.
+
+    The final column in operating row ``d`` is midnight of calendar day
+    ``d + 1``.  Consumers must use this matrix for information cutoffs instead
+    of treating every cell in a row as belonging to its row label.
+    """
+    return np.asarray([template_datetimes(day) for day in operating_days], dtype=object)
+
+
 def power_kw_to_energy(power_kw: np.ndarray, dt_hours: float = DT_HOURS) -> np.ndarray:
     """Perform the sole kW -> kWh interval conversion at an input boundary."""
     return np.asarray(power_kw, dtype=float) * float(dt_hours)
