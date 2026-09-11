@@ -32,6 +32,38 @@ ROBUSTNESS_CSV = dio.OUTPUT_DIR / "robustness_scenario_seed.csv"
 BASELINES_CSV = dio.OUTPUT_DIR / "baselines.csv"
 
 
+def output_stat(planned, emergency, e_all, full_year_mask):
+    """汇总正式输出期指标。
+
+    兼容两种输入：全年 365 天数组，或主程序已裁剪的
+    2/1–12/31 共 334 天数组。
+    """
+    planned = np.asarray(planned)
+    emergency = np.asarray(emergency)
+    e_all = np.asarray(e_all)
+    expected_output_days = int(np.count_nonzero(full_year_mask))
+    if len(planned) == len(full_year_mask):
+        selected_planned = planned[full_year_mask]
+        selected_emergency = emergency[full_year_mask]
+        selected_e = e_all[full_year_mask]
+    elif len(planned) == expected_output_days:
+        selected_planned = planned
+        selected_emergency = emergency
+        selected_e = e_all
+    else:
+        raise ValueError(
+            f"费用数组长度 {len(planned)} 既不是全年 {len(full_year_mask)} "
+            f"也不是输出期 {expected_output_days}"
+        )
+    return {
+        "planned": float(selected_planned.sum()),
+        "emergency": float(selected_emergency.sum()),
+        "total": float((selected_planned + selected_emergency).sum()),
+        "emergency_kwh": float(selected_e.sum()),
+        "emergency_days": int((selected_e.sum(axis=1) > 1e-8).sum()),
+    }
+
+
 def _load_context():
     price, load_kw_typ, pv_kw_typ = dio.read_price_typical()
     dates, net, load, pv = dio.read_actual_data()
@@ -60,8 +92,11 @@ def run_scenario_seed_grid(price, net, f, load_resid, pv_resid, v):
                     d, f, load_resid, pv_resid,
                     n_scenarios=n_sc, lookback=LOOKBACK, seed=seed,
                 )
-                g, _ = opt.build_first_stage(price, scenarios, dio.E0_START, v)
-                _c, _d, _w, e, _E = opt.causal_dispatch(net[d], g, dio.E0_START)
+                g, first = opt.build_first_stage(price, scenarios, dio.E0_START, v)
+                _c, _d, _w, e, _E = opt.causal_dispatch(
+                    net[d], g, dio.E0_START,
+                    discharge_reference=first["stats"]["d_mean"],
+                )
                 _p, _em, total = opt.dispatch_cost(price, g, e)
                 costs.append(total)
             avg = float(np.mean(costs))
@@ -125,19 +160,10 @@ def run_baselines(price, net, f):
     total2 = z["total_cost"]
     e2_all = z["e"]
 
-    def stat(planned, emergency, e_all):
-        return {
-            "planned": float(planned[mask].sum()),
-            "emergency": float(emergency[mask].sum()),
-            "total": float((planned + emergency)[mask].sum()),
-            "emergency_kwh": float(e_all[mask].sum()),
-            "emergency_days": int((e_all[mask].sum(axis=1) > 1e-8).sum()),
-        }
-
     strategies = [
-        ("无储能因果策略", stat(planned0, emergency0, e0_all)),
-        ("确定性点预测策略", stat(planned1, emergency1, e1_all)),
-        ("当前随机策略", stat(planned2, emergency2, e2_all)),
+        ("无储能因果策略", output_stat(planned0, emergency0, e0_all, mask)),
+        ("确定性点预测策略", output_stat(planned1, emergency1, e1_all, mask)),
+        ("当前随机策略", output_stat(planned2, emergency2, e2_all, mask)),
     ]
 
     print("\n" + "=" * 82)

@@ -65,6 +65,7 @@ def simulate_days(net, price, f, load_resid, pv_resid,
     w_all = np.zeros((D, N))
     e_all = np.zeros((D, N))
     E_all = np.zeros((D, N + 1))
+    d_reference_all = np.zeros((D, N))
 
     planned_cost = np.zeros(D)
     emergency_cost = np.zeros(D)
@@ -84,7 +85,10 @@ def simulate_days(net, price, f, load_resid, pv_resid,
             n_scenarios=n_scenarios, lookback=lookback, seed=seed,
         )
         g, first = opt.build_first_stage(price, scenarios, E_cur, v_terminal)
-        c, d_act, w, e, E = opt.causal_dispatch(net[day], g, E_cur)
+        d_reference = first["stats"]["d_mean"]
+        c, d_act, w, e, E = opt.causal_dispatch(
+            net[day], g, E_cur, discharge_reference=d_reference
+        )
 
         g_all[day] = g
         c_all[day] = c
@@ -92,6 +96,7 @@ def simulate_days(net, price, f, load_resid, pv_resid,
         w_all[day] = w
         e_all[day] = e
         E_all[day] = E
+        d_reference_all[day] = d_reference
 
         planned_cost[day] = float(np.sum(price * g))
         emergency_cost[day] = float(np.sum(dio.EMERGENCY_MULT * price * e))
@@ -109,6 +114,7 @@ def simulate_days(net, price, f, load_resid, pv_resid,
         "w": w_all,
         "e": e_all,
         "E": E_all,
+        "d_reference": d_reference_all,
         "planned_cost": planned_cost,
         "emergency_cost": emergency_cost,
         "total_cost": total_cost,
@@ -167,6 +173,7 @@ def main():
         w=w_out,
         e=e_out,
         E=E_out,
+        d_reference=sim["d_reference"][mask],
         planned_cost=planned_out,
         emergency_cost=emergency_out,
         total_cost=total_out,

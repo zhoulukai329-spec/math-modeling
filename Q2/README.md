@@ -12,6 +12,7 @@ python Q2/src/make_figures.py
 python Q2/src/verify_problem2.py
 python Q2/src/robustness.py
 python Q2/src/imputation_sensitivity.py
+python -m unittest discover -s Q2/tests -v
 ```
 
 > 注：`src/stress_test.py` 已废弃（旧 API），功能由 `robustness.py` 与
@@ -28,3 +29,4 @@ python Q2/src/imputation_sensitivity.py
 - `output/baselines.csv`：同一信息集基准对照（无储能因果 / 确定性点预测 / 随机策略）
 - `output/fig1~fig4.png`：结果图
 - `output/问题2_求解报告.md`：求解报告
+- `Q2问题解决方案步骤.md`：当前模型、调度语义与完整实现链路说明

@@ -52,15 +52,16 @@ def build_first_stage(price, scenarios, E_start, v_terminal):
     E_start: 当日 0:00 储电量 kWh
     v_terminal: 24:00 储能量的线性终值系数
 
-    语义约束：引入 0-1 变量 z_{s,t} 表示时段是否处于供电缺口，强制
-    “紧急购电 e 与充电 c 互斥”，从而禁止用紧急购电给储能充电跨时套利。
+    语义约束：对场景净负荷先拆成正净需求和光伏富余。
+    计划电与光伏富余只能分配给当期负荷、充电或弃电；
+    紧急电只出现在负荷供给方程中，因此不可能进入充电链路。
 
     返回:
       g: (144,) 计划购电量
       result: 字典，含目标值与各场景变量的期望统计
     """
     S = scenarios.shape[0]
-    per = 5 * N + 1  # c(N)+d(N)+w(N)+e(N)+E(N+1)
+    per = 6 * N + 1  # c(N)+d(N)+w(N)+e(N)+u(N)+E(N+1)
     n_z = S * N
     n_vars = N + S * per + n_z
 
@@ -81,14 +82,16 @@ def build_first_stage(price, scenarios, E_start, v_terminal):
     def e_idx(s, t):
         return s_start(s) + 3 * N + t
 
-    def E_idx(s, t):
+    def u_idx(s, t):
         return s_start(s) + 4 * N + t
+
+    def E_idx(s, t):
+        return s_start(s) + 5 * N + t
 
     def z_idx(s, t):
         return N + S * per + s * N + t
 
-    # 紧急购电上界：e <= 当期缺口 <= max(0, 净负荷)，取一个安全的大 M。
-    M_e = float(max(np.max(scenarios), 0.0)) + C_MAX + 1.0
+    M_e = float(max(np.max(scenarios), 0.0)) + 1.0
 
     c_obj = np.zeros(n_vars)
     for t in range(N):
@@ -110,9 +113,11 @@ def build_first_stage(price, scenarios, E_start, v_terminal):
             bounds.append((0.0, None))        # w
         for _t in range(N):
             bounds.append((0.0, None))        # e
+        for _t in range(N):
+            bounds.append((0.0, None))        # u：计划电/光伏直接供负荷
         for _t in range(N + 1):
             bounds.append((E_MIN, E_MAX))     # E
-    bounds += [(0.0, 1.0)] * n_z              # z 为 0-1 变量
+    bounds += [(0.0, 1.0)] * n_z
 
     integrality = np.zeros(n_vars, dtype=int)
     integrality[N + S * per:] = 1
@@ -134,11 +139,19 @@ def build_first_stage(price, scenarios, E_start, v_terminal):
 
     for s in range(S):
         for t in range(N):
-            # 能量平衡：g + e + d - c - w = net
+            demand = max(float(scenarios[s, t]), 0.0)
+            renewable_surplus = max(-float(scenarios[s, t]), 0.0)
+            # 计划电+净光伏富余 = 直供负荷+充电+弃电
             add_row(
-                [g_start + t, e_idx(s, t), d_idx(s, t), c_idx(s, t), w_idx(s, t)],
-                [1.0, 1.0, 1.0, -1.0, -1.0],
-                scenarios[s, t],
+                [g_start + t, u_idx(s, t), c_idx(s, t), w_idx(s, t)],
+                [1.0, -1.0, -1.0, -1.0],
+                -renewable_surplus,
+            )
+            # 净负荷需求 = 计划电/光伏直供+放电+紧急电
+            add_row(
+                [u_idx(s, t), d_idx(s, t), e_idx(s, t)],
+                [1.0, 1.0, 1.0],
+                demand,
             )
         for t in range(N):
             add_row(
@@ -151,31 +164,29 @@ def build_first_stage(price, scenarios, E_start, v_terminal):
     n_rows = row_idx
     A_eq = coo_matrix((vals, (rows, cols)), shape=(n_rows, n_vars))
 
-    # 不等式（语义不变量）：e <= M_e * z 且 c <= C_MAX * (1 - z)。
-    ub_rows = []
-    ub_cols = []
-    ub_vals = []
-    ub_rhs = []
-    ub_idx = 0
+    # e>0 时 z=1，并强制 c=0；从而禁止紧急电直接或间接充电。
+    ub_rows, ub_cols, ub_vals, ub_rhs = [], [], [], []
 
     def add_ub(col_indices, coefs, rhs_val):
-        nonlocal ub_idx
+        row = len(ub_rhs)
         for col, val in zip(col_indices, coefs):
-            ub_rows.append(ub_idx)
+            ub_rows.append(row)
             ub_cols.append(col)
             ub_vals.append(val)
         ub_rhs.append(rhs_val)
-        ub_idx += 1
 
     for s in range(S):
         for t in range(N):
             add_ub([e_idx(s, t), z_idx(s, t)], [1.0, -M_e], 0.0)
             add_ub([c_idx(s, t), z_idx(s, t)], [1.0, C_MAX], C_MAX)
 
-    A_ub = coo_matrix((ub_vals, (ub_rows, ub_cols)), shape=(ub_idx, n_vars))
-
-    res = _solve_lp(c_obj, A_eq, rhs, bounds, "问题2 第一阶段",
-                    A_ub_coo=A_ub, b_ub=ub_rhs, integrality=integrality)
+    A_ub = coo_matrix(
+        (ub_vals, (ub_rows, ub_cols)), shape=(len(ub_rhs), n_vars)
+    )
+    res = _solve_lp(
+        c_obj, A_eq, rhs, bounds, "问题2 第一阶段",
+        A_ub_coo=A_ub, b_ub=ub_rhs, integrality=integrality,
+    )
 
     g = res.x[g_start : g_start + N]
     stats = {}
@@ -192,6 +203,9 @@ def build_first_stage(price, scenarios, E_start, v_terminal):
             "d_mean": np.mean(d_list, axis=0),
             "E_mean": np.mean(E_list, axis=0),
             "expected_emergency": float(np.mean([np.sum(EMERGENCY_MULT * price * e) for e in e_list])),
+            "emergency_charge_overlap": int(np.sum(
+                (np.asarray(e_list) > 1e-8) & (np.asarray(c_list) > 1e-8)
+            )),
         }
 
     result = {
@@ -201,19 +215,20 @@ def build_first_stage(price, scenarios, E_start, v_terminal):
         "success": bool(res.success),
         "status": int(res.status),
         "message": str(res.message),
+        "model_type": "two_stage_stochastic_milp",
     }
     return g, result
 
 
-def causal_dispatch(net_actual, g, E_start):
+def causal_dispatch(net_actual, g, E_start, discharge_reference=None):
     """因果逐时调度（第二阶段真实回测）。
 
-    固定计划购电量 g，逐时段只用当期实际净负荷 net_actual[t] 与当前储电量，
-    不读取 t 之后的信息，因此不存在前视偏差；同时紧急购电只弥补当期缺口，
-    禁止进入充电链路（杜绝“紧急购电给电池充电、跨时套利”）：
+    固定计划购电量 g，逐时段只用当期实际净负荷 net_actual[t]、当前储电量
+    和 0:00 已确定的参考放电量 discharge_reference[t]，不读取未来实际值。
+    紧急购电只弥补当期缺口，禁止进入充电链路：
 
       r = net_actual[t] - g[t]
-      r > 0（缺口）：放电 d = min(r, C_MAX, (E-E_MIN)*ETA_D)；紧急 e = r - d；
+      r > 0（缺口）：放电不超过参考量、缺口、功率与当前可用电量；紧急 e = r - d；
                      充电 c = 0，弃光 w = 0。
       r <= 0（富余）：充电 c = min(-r, C_MAX, (E_MAX-E)/ETA_C)；弃光 w = -r - c；
                      放电 d = 0，紧急 e = 0。
@@ -222,6 +237,11 @@ def causal_dispatch(net_actual, g, E_start):
     g + e + d - c - w = net_actual、SOC 动态一致、上下限与非负性成立。
     """
     n = len(net_actual)
+    if discharge_reference is None:
+        discharge_reference = np.full(n, C_MAX)
+    discharge_reference = np.asarray(discharge_reference, dtype=float)
+    if discharge_reference.shape != (n,):
+        raise ValueError(f"discharge_reference 期望形状 {(n,)}，实际 {discharge_reference.shape}")
     c = np.zeros(n)
     d = np.zeros(n)
     w = np.zeros(n)
@@ -231,7 +251,12 @@ def causal_dispatch(net_actual, g, E_start):
     for t in range(n):
         r = float(net_actual[t]) - float(g[t])
         if r > 0.0:
-            d[t] = min(r, C_MAX, (E[t] - E_MIN) * ETA_D)
+            d[t] = min(
+                r,
+                max(0.0, discharge_reference[t]),
+                C_MAX,
+                (E[t] - E_MIN) * ETA_D,
+            )
             e[t] = r - d[t]
         else:
             s = -r

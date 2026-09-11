@@ -169,13 +169,16 @@ def run_residual_monte_carlo(price, load, pv, typical_load, typical_pv,
     for d in day_idx:
         i = int(d - OUTPUT_START_DAY)
         g = main_sim["sim"]["g"][d]
+        d_reference = main_sim["sim"]["d_reference"][d]
         E0 = float(main_sim["sim"]["E"][d, 0])
         scenarios = fc.scenarios_for_day(
             d, f, load_resid, pv_resid,
             n_scenarios=MONTE_CARLO_N_SAMPLES, lookback=LOOKBACK, seed=2025,
         )
         for s in range(MONTE_CARLO_N_SAMPLES):
-            _c, _d, _w, e, _E = opt.causal_dispatch(scenarios[s], g, E0)
+            _c, _d, _w, e, _E = opt.causal_dispatch(
+                scenarios[s], g, E0, discharge_reference=d_reference
+            )
             _p, _em, cost = opt.dispatch_cost(price, g, e)
             all_cost.append(cost)
             all_emergency_kwh.append(float(e.sum()))

@@ -113,7 +113,7 @@ def check_causality():
 
 def check_emergency_semantics(z):
     """语义不变量：紧急购电只弥补当期缺口，禁止给储能充电。"""
-    g, c, e, net = z["g"], z["c"], z["e"], z["net"]
+    g, c, d, w, e, net = z["g"], z["c"], z["d"], z["w"], z["e"], z["net"]
     tol = 1e-6
     # 1) 计划购电量 >= 当期净负荷时不应有紧急购电
     surplus_emergency = int(((g >= net - tol) & (e > tol)).sum())
@@ -122,11 +122,16 @@ def check_emergency_semantics(z):
     # 3) 紧急购电不超过当期缺口 max(0, net - g)
     deficit = np.maximum(0.0, net - g)
     over = float(np.max(np.maximum(0.0, e - deficit)))
+    exact_gap = float(np.max(np.abs(e - np.maximum(0.0, net - g - d))))
+    emergency_and_waste = int(((e > tol) & (w > tol)).sum())
     print("\n[5] 紧急购电语义不变量")
     print(f"  计划>=净负荷仍紧急购电的时段数: {surplus_emergency}")
     print(f"  紧急购电与充电同时发生的时段数: {e_and_c}")
     print(f"  紧急购电超过当期缺口的最大量: {over:.3e} kWh")
-    ok = surplus_emergency == 0 and e_and_c == 0 and over <= 1e-4
+    print(f"  紧急购电与放电后剩余缺口最大误差: {exact_gap:.3e} kWh")
+    print(f"  紧急购电与弃电同时发生的时段数: {emergency_and_waste}")
+    ok = (surplus_emergency == 0 and e_and_c == 0 and over <= 1e-4
+          and exact_gap <= 1e-4 and emergency_and_waste == 0)
     print(f"  [{'PASS' if ok else 'FAIL'}] 紧急购电语义不变量")
     return ok
 
