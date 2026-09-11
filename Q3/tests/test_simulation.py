@@ -184,3 +184,10 @@ def test_failed_solver_stops_without_rule_fallback(sim, monkeypatch):
 def test_invalid_simulation_sizes_fail_early(sim, kwargs):
     with pytest.raises(ValueError, match="positive"):
         config(sim, inputs(), **kwargs)
+
+
+def test_soc_roundoff_is_clipped_but_real_bound_violation_is_rejected(sim):
+    assert sim._clip_soc_roundoff(1199.9999999999998, 1200.0, 10800.0) == 1200.0
+    assert sim._clip_soc_roundoff(10800.000000000002, 1200.0, 10800.0) == 10800.0
+    with pytest.raises(sim.SimulationSolveError, match="outside bounds"):
+        sim._clip_soc_roundoff(1199.99, 1200.0, 10800.0)

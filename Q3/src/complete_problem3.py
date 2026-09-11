@@ -20,7 +20,7 @@ def main():
         print(json.dumps(row), flush=True)
         (args.output_dir / "progress.json").write_text(json.dumps(row, indent=2), encoding="utf-8")
     config = SimulationConfig(data=load_inputs(), attachment_dir=ATTACHMENT_DIR,
-                              horizon_steps=144, deterministic=True, n_scenarios=1,
+                              horizon_steps=144, deterministic=False, n_scenarios=12,
                               max_steps=None, time_limit=30)
     if args.calibration:
         record = json.loads(args.calibration.read_text(encoding="utf-8"))

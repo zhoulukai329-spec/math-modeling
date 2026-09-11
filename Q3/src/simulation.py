@@ -189,6 +189,15 @@ class SimulationSolveError(RuntimeError):
     """No valid incumbent: stop rather than substitute a dispatch rule."""
 
 
+def _clip_soc_roundoff(value: float, lower: float, upper: float,
+                       tolerance: float = 1e-8) -> float:
+    """Clip solver-sized floating error at SOC bounds; reject real violations."""
+    if value < lower - tolerance or value > upper + tolerance:
+        raise SimulationSolveError(
+            f"executed SOC {value} outside bounds [{lower}, {upper}]")
+    return float(np.clip(value, lower, upper))
+
+
 def _release_catalog(data: InputData):
     releases = sorted((datetime.combine(day, time()) + timedelta(minutes=minute), key)
                       for key in data.pv_hourly_forecasts for day, minute in [key])
@@ -372,8 +381,10 @@ def simulate(config: SimulationConfig, date_start: date | str,
             for name in ("charge", "discharge", "emergency", "spill", "mode"):
                 observed[name][ix] = getattr(solution, name)[0, 0]
             observed["soc_before"][ix] = soc
-            soc = float(soc + config.charge_efficiency * observed["charge"][ix]
-                        - observed["discharge"][ix] / config.discharge_efficiency)
+            soc = _clip_soc_roundoff(
+                soc + config.charge_efficiency * observed["charge"][ix]
+                - observed["discharge"][ix] / config.discharge_efficiency,
+                config.soc_min, config.soc_max)
             if abs(soc - solution.soc[0, 1]) > 1e-5:
                 raise SimulationSolveError(f"executed SOC disagrees with MILP at {now}")
             observed["soc_after"][ix] = soc
