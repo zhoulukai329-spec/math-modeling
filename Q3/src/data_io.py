@@ -245,9 +245,25 @@ def load_inputs(
     """
     root = Path(attachment_dir)
     dates, load_energy, pv_energy = _read_actuals(root / "附件2.xlsx")
-    price = _read_price(root / "附件4.xlsx", dates)
+    price = _read_fixed_price(root / "附件1.xlsx", len(dates))
     forecasts = _read_pv_forecasts(root / "附件3.xlsx")
     if {day for day, _release in forecasts} != set(dates):
         raise ValueError("PV forecast dates do not match actual-data dates")
     labels = _read_template_labels(root / "附件5" / "result3.xlsx")
     return InputData(dates, load_energy, pv_energy, price, forecasts, labels)
+
+
+def _read_fixed_price(path: Path, n_days: int) -> np.ndarray:
+    """Q3 uses Attachment 1's identical daily tariff, in original order."""
+    book = load_workbook(path, read_only=True, data_only=True)
+    try:
+        rows = list(book.worksheets[0].iter_rows(min_row=2, values_only=True))
+        minutes = np.asarray([parse_clock_minutes(row[0]) for row in rows])
+        if not np.array_equal(minutes, template_left_endpoint_minutes()):
+            raise ValueError("fixed price must follow the 00:10..24:00 source order")
+        prices = np.asarray([row[1] for row in rows], dtype=float)
+        if not np.isfinite(prices).all() or np.any(prices < 0):
+            raise ValueError("fixed price must be finite/nonnegative")
+        return np.tile(prices, (n_days, 1))
+    finally:
+        book.close()

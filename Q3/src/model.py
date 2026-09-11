@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from time import perf_counter
 from typing import Any
+import warnings
 
 import numpy as np
 from scipy.optimize import Bounds, LinearConstraint, milp
@@ -275,9 +276,14 @@ def solve_mpc(problem: MPCProblem) -> MPCSolution:
 
     matrix = coo_matrix((coefficients, (rows, columns)), shape=(len(row_lb), size)).tocsc()
     constraint_lower, constraint_upper = np.asarray(row_lb), np.asarray(row_ub)
-    result = milp(c=objective, integrality=integrality, bounds=Bounds(lb, ub),
-                  constraints=LinearConstraint(matrix, constraint_lower, constraint_upper),
-                  options={"time_limit": p.time_limit, "mip_rel_gap": p.mip_rel_gap, "presolve": True})
+    # HiGHS' default 1e-6 integer tolerance can admit 8e-4 kWh through
+    # the 833 kWh mode bounds. Tighten it instead of weakening the audit.
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message="Unrecognized options detected:.*", category=RuntimeWarning)
+        result = milp(c=objective, integrality=integrality, bounds=Bounds(lb, ub),
+                      constraints=LinearConstraint(matrix, constraint_lower, constraint_upper),
+                      options={"time_limit": p.time_limit, "mip_rel_gap": p.mip_rel_gap,
+                               "presolve": True, "mip_feasibility_tolerance": 1e-9})
     solver_status = int(result.status)
     message = str(result.message)
     status = {0: "optimal", 1: "limit_reached", 2: "infeasible", 3: "unbounded", 4: "solver_error"}.get(

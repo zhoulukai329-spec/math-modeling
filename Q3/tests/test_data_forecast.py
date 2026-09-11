@@ -236,6 +236,14 @@ def _write_price_workbook(path, days):
     book.save(path)
 
 
+def _write_fixed_price(path):
+    book = Workbook()
+    book.active.append(["time", "price"])
+    for minute in range(10, 1450, 10):
+        book.active.append([f"{minute // 60}:{minute % 60:02d}", minute / 1000])
+    book.save(path)
+
+
 def _write_forecast_workbook(path, days, *, invalid_date=None):
     book = Workbook()
     ws = book.active
@@ -272,6 +280,7 @@ def test_load_inputs_checks_forecast_dates_and_keeps_source_order():
         (root / "附件5").mkdir()
         _write_actual_workbook(root / "附件2.xlsx", days)
         _write_price_workbook(root / "附件4.xlsx", days)
+        _write_fixed_price(root / "附件1.xlsx")
         _write_forecast_workbook(root / "附件3.xlsx", days)
         template = Workbook()
         template.active.append(_template_header() + ["daily energy", "daily cost"])
@@ -280,6 +289,7 @@ def test_load_inputs_checks_forecast_dates_and_keeps_source_order():
         inputs = dio.load_inputs(root)
 
         assert inputs.dates == days
+        np.testing.assert_allclose(inputs.price, np.tile(np.arange(10, 1450, 10) / 1000, (2, 1)))
         np.testing.assert_allclose(inputs.load_energy[1], (1_000 + np.arange(144)) / 6.0)
         assert inputs.template_labels[0] == "0:10"
         assert inputs.template_labels[-1] == "24:00"
@@ -293,6 +303,7 @@ def test_load_inputs_rejects_forecast_date_not_in_actual_data():
         (root / "附件5").mkdir()
         _write_actual_workbook(root / "附件2.xlsx", days)
         _write_price_workbook(root / "附件4.xlsx", days)
+        _write_fixed_price(root / "附件1.xlsx")
         _write_forecast_workbook(root / "附件3.xlsx", days, invalid_date=date(2025, 1, 3))
         template = Workbook()
         template.active.append(_template_header() + ["daily energy", "daily cost"])

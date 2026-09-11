@@ -233,7 +233,7 @@ def build_historical_residuals(data: InputData, issue_time: datetime) -> np.ndar
 
 
 def simulate(config: SimulationConfig, date_start: date | str,
-             date_end: date | str) -> SimulationResult:
+             date_end: date | str, *, progress=None) -> SimulationResult:
     """Run all selected rows (inclusive), or stop after ``max_steps`` executions.
 
     ``horizon_steps`` bounds execution lookahead. Issued baseline/revision solves
@@ -277,9 +277,12 @@ def simulate(config: SimulationConfig, date_start: date | str,
         release = releases[release_index]
         issue_day, minute = release_keys[release_index]
         offset = int((targets[0] - release).total_seconds() // 600)
-        cache_key = release, offset + length
+        # A publication's forecast never changes between decisions. Construct
+        # the longest usable slice once instead of rebuilding history 144x/day.
+        cache_key = release, 289
         if cache_key not in forecast_cache:
-            forecast_cache[cache_key] = build_information_forecast(data, issue_day, minute, offset + length)
+            forecast_cache.clear()
+            forecast_cache[cache_key] = build_information_forecast(data, issue_day, minute, 289)
         forecast = forecast_cache[cache_key]
         load = forecast.load_energy[offset:offset + length].copy()
         point = forecast.pv_energy[offset:offset + length].copy()
@@ -381,6 +384,10 @@ def simulate(config: SimulationConfig, date_start: date | str,
             count += 1
         if config.max_steps is not None and count >= config.max_steps:
             break
+        if progress is not None:
+            progress(dict(day=str(data.dates[source_row]), executed_steps=count,
+                          solve_count=len(solve_log), soc=float(soc),
+                          elapsed_seconds=perf_counter() - started))
     baseline, final = np.full(shape, np.nan), np.full(shape, np.nan)
     costs = dict(baseline=0.0, revision_up=0.0, revision_down=0.0, emergency=0.0)
     for row, day in enumerate(dates):

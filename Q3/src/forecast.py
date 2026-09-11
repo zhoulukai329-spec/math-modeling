@@ -163,15 +163,18 @@ def build_pv_scenarios(
         cutoff = issue_time
 
     first = max(0, issue_day_index - lookback_days)
-    timestamps = source_datetimes(list(dates))
     paths: list[np.ndarray] = []
     for day in range(first, issue_day_index):
         try:
             path = _historical_path(residuals, day, start_step, horizon_steps)
-            path_times = _historical_path(timestamps, day, start_step, horizon_steps)
         except ValueError:
             continue
-        if np.all(path_times < cutoff):
+        last_target = datetime.combine(dates[day], time()) + timedelta(minutes=10 * (start_step + horizon_steps))
+        # The chronological path above includes at most adjacent business rows;
+        # dates need not be contiguous in synthetic callers, so use its last row.
+        end_day, end_step = divmod(start_step + horizon_steps - 1, 144)
+        last_target = datetime.combine(dates[day + end_day], time()) + timedelta(minutes=10 * (end_step + 1))
+        if last_target < cutoff:
             paths.append(path)
     if not paths:
         paths = [np.zeros(horizon_steps, dtype=float)]

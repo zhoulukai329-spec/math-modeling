@@ -1,0 +1,75 @@
+{"day": "2025-01-01", "executed_steps": 144, "solve_count": 149, "soc": 1200.0, "elapsed_seconds": 3.8441973000008147}
+{"day": "2025-01-02", "executed_steps": 288, "solve_count": 297, "soc": 1365.1683916666664, "elapsed_seconds": 8.503004400001373}
+{"day": "2025-01-03", "executed_steps": 432, "solve_count": 445, "soc": 8582.921693981481, "elapsed_seconds": 13.71434949999093}
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+{"day": "2025-01-04", "executed_steps": 576, "solve_count": 593, "soc": 6328.920778024686, "elapsed_seconds": 18.984945400006836}
+{"day": "2025-01-05", "executed_steps": 720, "solve_count": 741, "soc": 1200.0, "elapsed_seconds": 23.310528100002557}
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+{"day": "2025-01-06", "executed_steps": 864, "solve_count": 889, "soc": 1200.0, "elapsed_seconds": 27.8880543000123}
+{"day": "2025-01-07", "executed_steps": 1008, "solve_count": 1037, "soc": 1200.0, "elapsed_seconds": 32.51656260000891}
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+{"day": "2025-01-08", "executed_steps": 1152, "solve_count": 1185, "soc": 1200.0, "elapsed_seconds": 36.821170300012454}
+{"day": "2025-01-09", "executed_steps": 1296, "solve_count": 1333, "soc": 1315.28650875, "elapsed_seconds": 40.57400059999782}
+{"day": "2025-01-10", "executed_steps": 1440, "solve_count": 1481, "soc": 7403.091028055553, "elapsed_seconds": 45.36039390001679}
+{"day": "2025-01-11", "executed_steps": 1584, "solve_count": 1629, "soc": 6629.266847526749, "elapsed_seconds": 50.819456700002775}
+{"day": "2025-01-12", "executed_steps": 1728, "solve_count": 1777, "soc": 1200.0, "elapsed_seconds": 55.70924450000166}
+{"day": "2025-01-13", "executed_steps": 1872, "solve_count": 1925, "soc": 1200.0, "elapsed_seconds": 60.312624000012875}
+{"day": "2025-01-14", "executed_steps": 2016, "solve_count": 2073, "soc": 1200.0, "elapsed_seconds": 64.77867020000122}
+{"day": "2025-01-15", "executed_steps": 2160, "solve_count": 2221, "soc": 1200.0, "elapsed_seconds": 68.59684000001289}
+{"day": "2025-01-16", "executed_steps": 2304, "solve_count": 2369, "soc": 1303.7649999999999, "elapsed_seconds": 72.2986188000068}
+{"day": "2025-01-17", "executed_steps": 2448, "solve_count": 2517, "soc": 7138.041701990738, "elapsed_seconds": 77.25556380001944}
+{"day": "2025-01-18", "executed_steps": 2592, "solve_count": 2665, "soc": 6695.138000217867, "elapsed_seconds": 81.9647845000145}
+{"day": "2025-01-19", "executed_steps": 2736, "solve_count": 2813, "soc": 1200.0, "elapsed_seconds": 85.60808740000357}
+{"day": "2025-01-20", "executed_steps": 2880, "solve_count": 2961, "soc": 1200.0, "elapsed_seconds": 89.8300414000114}
+{"day": "2025-01-21", "executed_steps": 3024, "solve_count": 3109, "soc": 1200.0, "elapsed_seconds": 93.64404620000278}
+{"day": "2025-01-22", "executed_steps": 3168, "solve_count": 3257, "soc": 1200.0, "elapsed_seconds": 97.4380361000076}
+{"day": "2025-01-23", "executed_steps": 3312, "solve_count": 3405, "soc": 1310.4433445454547, "elapsed_seconds": 101.19739690001006}
+{"day": "2025-01-24", "executed_steps": 3456, "solve_count": 3553, "soc": 7414.671412774118, "elapsed_seconds": 105.96811700001126}
+{"day": "2025-01-25", "executed_steps": 3600, "solve_count": 3701, "soc": 6829.916909287441, "elapsed_seconds": 111.07649350000429}
+{"day": "2025-01-26", "executed_steps": 3744, "solve_count": 3849, "soc": 1200.0, "elapsed_seconds": 115.34306010001455}
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+{"day": "2025-01-27", "executed_steps": 3888, "solve_count": 3997, "soc": 1200.0, "elapsed_seconds": 119.839759399998}
+{"day": "2025-01-28", "executed_steps": 4032, "solve_count": 4145, "soc": 1200.0, "elapsed_seconds": 124.85498999999254}
+{"day": "2025-01-29", "executed_steps": 4176, "solve_count": 4293, "soc": 1200.0, "elapsed_seconds": 128.97075470001437}
+{"day": "2025-01-30", "executed_steps": 4320, "solve_count": 4441, "soc": 1300.6322312068964, "elapsed_seconds": 133.69057930001873}
+{"day": "2025-01-31", "executed_steps": 4464, "solve_count": 4588, "soc": 7505.757493828223, "elapsed_seconds": 138.06929350001155}
+{"day": "2025-01-01", "executed_steps": 144, "solve_count": 149, "soc": 1200.0, "elapsed_seconds": 4.397992599988356}
+{"day": "2025-01-02", "executed_steps": 288, "solve_count": 297, "soc": 1365.1683916666664, "elapsed_seconds": 8.985668799985433}
+{"day": "2025-01-03", "executed_steps": 432, "solve_count": 445, "soc": 8582.921693981481, "elapsed_seconds": 13.779801500000758}
+{"day": "2025-01-04", "executed_steps": 576, "solve_count": 593, "soc": 6328.920778024686, "elapsed_seconds": 19.2769910999923}
+{"day": "2025-01-05", "executed_steps": 720, "solve_count": 741, "soc": 1200.0, "elapsed_seconds": 23.283661599998595}
+{"day": "2025-01-06", "executed_steps": 864, "solve_count": 889, "soc": 1200.0, "elapsed_seconds": 27.69501309999032}
+{"day": "2025-01-07", "executed_steps": 1008, "solve_count": 1037, "soc": 1200.0, "elapsed_seconds": 31.974517999973614}
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+{"day": "2025-01-08", "executed_steps": 1152, "solve_count": 1185, "soc": 1200.0, "elapsed_seconds": 36.434839399997145}
+{"day": "2025-01-09", "executed_steps": 1296, "solve_count": 1333, "soc": 1315.28650875, "elapsed_seconds": 40.33986789998016}
+HighsMipSolverData::transformNewIntegerFeasibleSolution tmpSolver.run();
+{"day": "2025-01-10", "executed_steps": 1440, "solve_count": 1481, "soc": 7403.091028055553, "elapsed_seconds": 44.964894799981266}
+{"day": "2025-01-11", "executed_steps": 1584, "solve_count": 1629, "soc": 6629.266847526749, "elapsed_seconds": 49.82348479999928}
+{"day": "2025-01-12", "executed_steps": 1728, "solve_count": 1777, "soc": 1200.0, "elapsed_seconds": 54.42774279997684}
+{"day": "2025-01-13", "executed_steps": 1872, "solve_count": 1925, "soc": 1200.0, "elapsed_seconds": 58.829930499981856}
+{"day": "2025-01-14", "executed_steps": 2016, "solve_count": 2073, "soc": 1200.0, "elapsed_seconds": 63.19836579999537}
+{"day": "2025-01-15", "executed_steps": 2160, "solve_count": 2221, "soc": 1200.0, "elapsed_seconds": 66.91963109999779}
+{"day": "2025-01-16", "executed_steps": 2304, "solve_count": 2369, "soc": 1303.7649999999999, "elapsed_seconds": 70.84980589998304}
+Traceback (most recent call last):
+  File "D:\-\Q3\src\complete_problem3.py", line 48, in <module>
+    main()
+  File "D:\-\Q3\src\complete_problem3.py", line 28, in main
+    record, _ = calibrate(config, args.output_dir / "calibration", progress=progress)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\-\Q3\src\calibration.py", line 19, in calibrate
+    result = simulate(cfg, "2025-01-01", "2025-01-31", progress=progress)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\-\Q3\src\simulation.py", line 370, in simulate
+    solution = solve_at(now, first, config.horizon_steps, "execution")
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\-\Q3\src\simulation.py", line 319, in solve_at
+    problem = MPCProblem(load, pv, data.price.ravel()[first:first + length], soc,
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 24, in __init__
+  File "D:\-\Q3\src\model.py", line 109, in __post_init__
+    raise ValueError("initial_soc must lie within SOC bounds")
+ValueError: initial_soc must lie within SOC bounds
