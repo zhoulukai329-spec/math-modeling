@@ -77,11 +77,11 @@ def _data_row_xml(row_num, values, col_styles):
 
 
 def _fmt_minutes(minutes):
+    if minutes == 1440:
+        return "24:00"
     minutes = minutes % 1440
     h = minutes // 60
     m = minutes % 60
-    if minutes == 1440:
-        return "24:00"
     if m == 0:
         return f"{h}:00"
     return f"{h}:{m:02d}"

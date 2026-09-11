@@ -12,8 +12,14 @@ python Q2/src/make_figures.py
 python Q2/src/verify_problem2.py
 python Q2/src/robustness.py
 python Q2/src/imputation_sensitivity.py
+python Q2/src/fill_reports.py
+python Q2/src/emergency_table.py
 python -m unittest discover -s Q2/tests -v
 ```
+
+`fill_reports.py` 按章节回填两份报告的数值表；须在以上求解与分析完成后运行。
+`emergency_table.py` 生成四个指定日期并排的紧急购电表，依赖 `numpy`、
+`matplotlib` 和 `openpyxl`。连续紧急购电时段合并，购电量采用 kWh。
 
 > 注：`src/stress_test.py` 已废弃（旧 API），功能由 `robustness.py` 与
 > `imputation_sensitivity.py` 覆盖，请用 `git rm Q2/src/stress_test.py` 删除。
@@ -21,6 +27,7 @@ python -m unittest discover -s Q2/tests -v
 ## 输出
 
 - `output/result2.xlsx`：最终提交结果文件
+- `output/微网在指定日期的紧急购电量.md/.xlsx/.png`：四个指定日期各两列的紧急购电表
 - `output/prob2_solution.npz`：完整逐日逐时段解
 - `output/forecast_rolling_metrics.csv`：因果预测滚动检验误差对比
 - `output/imputation_sensitivity.csv`：1 月 1 日 0:00 插补敏感性检验
