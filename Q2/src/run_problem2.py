@@ -3,6 +3,9 @@
 
 运行方式（在仓库根目录）:
     python Q2/src/run_problem2.py
+
+本文件同时导出 simulate_days()，供敏感性检验与蒙特卡洛脚本复用，
+保证这些脚本与主程序使用完全相同的两阶段随机线性规划逻辑。
 """
 import sys
 import time
@@ -25,18 +28,34 @@ N_SCENARIOS = 6
 LOOKBACK = 28
 
 
-def main():
-    t0 = time.time()
+def simulate_days(net, price, f, r, n_scenarios=N_SCENARIOS, lookback=LOOKBACK,
+                  seed=2025, E_start=dio.E0_START, v_terminal=None,
+                  start_day=0, end_day=None):
+    """逐日运行两阶段随机线性规划并回测。
 
-    price, load_typical_kw, pv_typical_kw = dio.read_price_typical()
-    dates, net, load, pv = dio.read_actual_data()
-    typical_net = (load_typical_kw - pv_typical_kw) * dio.DT
+    参数:
+      net:        (D,144) 全年实际净负荷能量 (kWh)
+      price:      (144,) 日内电价 (元/kWh)
+      f:          因果点预测 (D,144)
+      r:          因果残差 (D,144)
+      n_scenarios: 场景数
+      lookback:    残差场景池回看窗口
+      seed:        确定性抽样种子
+      E_start:     第 start_day 天 0:00 的储电量 (kWh)
+      v_terminal:  24:00 储能量终值系数；None 时用 data_io.terminal_value
+      start_day:   起算日期索引（含）
+      end_day:     结束日期索引（含）；None 表示到最后一天
 
-    f, r = fc.build_causal_forecasts(net, typical_net)
-    v_terminal = dio.terminal_value(price)
+    返回 dict，键为 g/c/d/w/e/E/planned_cost/emergency_cost/total_cost/
+    first_obj/first_expected_emergency/solve_status。
+    """
+    if v_terminal is None:
+        v_terminal = dio.terminal_value(price)
 
     D = net.shape[0]
     N = dio.N
+    if end_day is None:
+        end_day = D - 1
 
     g_all = np.zeros((D, N))
     c_all = np.zeros((D, N))
@@ -51,15 +70,15 @@ def main():
     first_obj = np.zeros(D)
     first_expected_emergency = np.zeros(D)
 
-    E_cur = dio.E0_START
+    E_cur = float(E_start)
     solve_status = []
 
-    for day in range(D):
+    for day in range(start_day, end_day + 1):
         if day % 30 == 0:
-            print(f"[{time.time() - t0:6.1f}s] 处理日期索引 {day}/{D-1}", flush=True)
+            print(f"    处理日期索引 {day}/{D-1}", flush=True)
 
         scenarios = fc.scenarios_for_day(
-            day, net, f, r, n_scenarios=N_SCENARIOS, lookback=LOOKBACK, seed=2025
+            day, net, f, r, n_scenarios=n_scenarios, lookback=lookback, seed=seed
         )
         g, first = opt.build_first_stage(price, scenarios, E_cur, v_terminal)
         c, d_act, w, e, E, second = opt.build_second_stage(
@@ -82,20 +101,55 @@ def main():
 
         E_cur = float(E[-1])
 
+    return {
+        "g": g_all,
+        "c": c_all,
+        "d": d_all,
+        "w": w_all,
+        "e": e_all,
+        "E": E_all,
+        "planned_cost": planned_cost,
+        "emergency_cost": emergency_cost,
+        "total_cost": total_cost,
+        "first_obj": first_obj,
+        "first_expected_emergency": first_expected_emergency,
+        "solve_status": solve_status,
+    }
+
+
+def main():
+    t0 = time.time()
+
+    price, load_typical_kw, pv_typical_kw = dio.read_price_typical()
+    dates, net, load, pv = dio.read_actual_data()
+    typical_net = (load_typical_kw - pv_typical_kw) * dio.DT
+
+    f, r = fc.build_causal_forecasts(net, typical_net)
+    v_terminal = dio.terminal_value(price)
+
+    D = net.shape[0]
+
+    print("=" * 70)
+    print("问题 2 逐日两阶段随机规划回测")
+    print("=" * 70)
+    sim = simulate_days(
+        net, price, f, r, n_scenarios=N_SCENARIOS, lookback=LOOKBACK,
+        seed=2025, E_start=dio.E0_START, v_terminal=v_terminal,
+    )
     print(f"\n全年回测完成，用时 {time.time() - t0:.1f} s")
 
     mask = np.arange(D) >= OUTPUT_START_DAY
     dates_out = dates[mask]
-    g_out = g_all[mask]
-    c_out = c_all[mask]
-    d_out = d_all[mask]
-    w_out = w_all[mask]
-    e_out = e_all[mask]
-    E_out = E_all[mask]
+    g_out = sim["g"][mask]
+    c_out = sim["c"][mask]
+    d_out = sim["d"][mask]
+    w_out = sim["w"][mask]
+    e_out = sim["e"][mask]
+    E_out = sim["E"][mask]
     net_out = net[mask]
-    planned_out = planned_cost[mask]
-    emergency_out = emergency_cost[mask]
-    total_out = total_cost[mask]
+    planned_out = sim["planned_cost"][mask]
+    emergency_out = sim["emergency_cost"][mask]
+    total_out = sim["total_cost"][mask]
 
     np.savez_compressed(
         str(dio.SOLUTION_NPZ),
@@ -111,8 +165,8 @@ def main():
         planned_cost=planned_out,
         emergency_cost=emergency_out,
         total_cost=total_out,
-        first_obj=first_obj[mask],
-        first_expected_emergency=first_expected_emergency[mask],
+        first_obj=sim["first_obj"][mask],
+        first_expected_emergency=sim["first_expected_emergency"][mask],
         v_terminal=np.array([v_terminal]),
         n_scenarios=np.array([N_SCENARIOS]),
         eta=np.array([dio.ETA_C, dio.ETA_D]),

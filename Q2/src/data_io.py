@@ -80,22 +80,22 @@ def read_price_typical():
     pv_raw = np.array([float(r[3]) for r in data], dtype=float)
     assert t_min[0] == 10 and t_min[-1] == 1440
     assert np.all(np.diff(t_min) == 10)
-    # 原始行首 0:10 对应区间 [0:10,0:20]，末行 0:00+1 对应当日 [0:00,0:10]。
-    # 循环右移一格，使下标 k 直接对应时钟区间 [10k,10(k+1)]。
+    # 附件 1 是单条周期化典型日曲线：末行 '0:00+1' 与首行 0:10 属于同一天的
+    # 循环首尾，因此右移一格即把 '0:00+1' 正确放回当天 0:00 位置。
+    # （这与附件 2 的跨日拼接不同：附件 2 的 '0:00+1' 属于下一天，不能循环右移。）
     price = np.roll(price_raw, 1)
     load_kw = np.roll(load_raw, 1)
     pv_kw = np.roll(pv_raw, 1)
     return price, load_kw, pv_kw
 
 
-def read_actual_data():
-    """读附件 2 全年负载/光伏实际功率，转成自然时钟顺序和能量。
+def _read_attachment2_matrices():
+    """读附件 2 的两张原始功率矩阵（kW），不做 0:00 对齐。
 
     返回:
-      dates: (365,)  Excel 日期序列号
-      net:   (365,144) 净负荷 L-G 的能量 (kWh)
-      load:  (365,144) 负载能量 (kWh)
-      pv:    (365,144) 光伏能量 (kWh)
+      dates:   (365,) Excel 日期序列号
+      load_kw: (365,144) 原始列序：列 0..142 = 当天 0:10..23:50，列 143 = 下一天 0:00-0:10
+      pv_kw:   (365,144) 同上
     """
     sheets = xr.read_sheet_rows(str(ATTACH2))
     # 附件2 第一张表=小区负载，第二张表=光伏发电实际功率
@@ -120,10 +120,49 @@ def read_actual_data():
 
     dates, load_kw = load_matrix(load_sheet)
     _, pv_kw = load_matrix(pv_sheet)
+    return dates, load_kw, pv_kw
 
-    # 循环右移一格，使下标 k = [10k,10(k+1)]。
-    load_kw = np.roll(load_kw, 1, axis=1)
-    pv_kw = np.roll(pv_kw, 1, axis=1)
+
+def _align_cross_day(mat, first_0):
+    """把附件 2 原始行（列=0:10..23:50, 0:00+1）转成自然时钟顺序。
+
+    自然时钟顺序 out[d, k] 对应区间 [10k, 10(k+1)]：
+      - out[d, 0]  = 当天 0:00-0:10；
+      - out[d, 1:] = 当天 0:10..23:50（取自本行前 143 列）。
+
+    仅 1 月 1 日(d=0) 的 0:00 在附件 2 中缺失，用 first_0 插补；
+    其余日期由前一行末列 '0:00+1' 跨行拼接得到，不使用本行 '0:00+1'
+    （本行 '0:00+1' 属于下一天，不能放到当天开头）。
+    """
+    D = mat.shape[0]
+    out = np.empty_like(mat)
+    out[:, 1:] = mat[:, :143]
+    out[0, 0] = first_0
+    out[1:, 0] = mat[:-1, 143]
+    return out
+
+
+def read_actual_data(first_load_kw=None, first_pv_kw=None):
+    """读附件 2 全年负载/光伏实际功率，转成自然时钟顺序和能量。
+
+    返回:
+      dates: (365,)  Excel 日期序列号
+      net:   (365,144) 净负荷 L-G 的能量 (kWh)
+      load:  (365,144) 负载能量 (kWh)
+      pv:    (365,144) 光伏能量 (kWh)
+
+    1 月 1 日缺失的 0:00-0:10 默认用同日 0:10/0:20 线性外推插补：
+        L_hat(0:00) = 2*L(0:10) - L(0:20)，PV 同理（午夜为 0）。
+    其余日期一律跨日拼接，不进行逐行循环移动。参数可用于敏感性检验。
+    """
+    dates, load_raw, pv_raw = _read_attachment2_matrices()
+    if first_load_kw is None:
+        first_load_kw = 2.0 * load_raw[0, 0] - load_raw[0, 1]
+    if first_pv_kw is None:
+        first_pv_kw = 2.0 * pv_raw[0, 0] - pv_raw[0, 1]
+
+    load_kw = _align_cross_day(load_raw, first_load_kw)
+    pv_kw = _align_cross_day(pv_raw, first_pv_kw)
 
     load = load_kw * DT
     pv = pv_kw * DT
