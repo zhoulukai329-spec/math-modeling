@@ -26,6 +26,9 @@ class MPCProblem:
     ``fixed_commitment`` is (T,), with NaN for free entries and a nonnegative
     value for frozen entries. ``previous_commitment=None`` purchases a baseline;
     otherwise only adjacent-version upward/downward changes are charged.
+    With a previous vector, optional boolean ``baseline_mask`` marks virtual
+    uncommitted cells charged at 1x price instead of revision deltas. These
+    mixed-horizon quantities have zero returned revision_up/revision_down.
     Battery limits are interval kWh and SOC is stored kWh, not a fraction.
     """
     load_energy: np.ndarray
@@ -48,6 +51,7 @@ class MPCProblem:
     cvar_alpha: float = 0.9
     time_limit: float = 30.0
     mip_rel_gap: float = 1e-4
+    baseline_mask: np.ndarray | None = None
 
     def __post_init__(self) -> None:
         load = np.array(self.load_energy, dtype=float, copy=True)
@@ -86,6 +90,13 @@ class MPCProblem:
             if value.shape != (horizon,) or not valid.all() or np.any(value < 0):
                 raise ValueError(f"{name} must be a nonnegative (T,) vector; only fixed_commitment allows NaN")
             object.__setattr__(self, name, value)
+        if self.baseline_mask is not None:
+            mask = np.asarray(self.baseline_mask)
+            if mask.shape != (horizon,) or mask.dtype.kind != "b":
+                raise ValueError("baseline_mask must be a boolean (T,) vector")
+            if self.previous_commitment is None:
+                raise ValueError("baseline_mask requires previous_commitment")
+            object.__setattr__(self, "baseline_mask", mask.copy())
         for name in ("initial_soc", "soc_min", "soc_max", "terminal_soc", "charge_limit",
                      "discharge_limit", "terminal_penalty", "throughput_penalty", "cvar_weight", "mip_rel_gap"):
             value = getattr(self, name)
@@ -166,6 +177,10 @@ def solve_mpc(problem: MPCProblem) -> MPCSolution:
     soc = allocate("soc", (k, t + 1))
     deviation = allocate("terminal_deviation", (k,))
     revision = p.previous_commitment is not None
+    # Mixed horizons: previously committed cells use adjacent-version deltas;
+    # virtual next-day purchases use the ordinary 1x baseline price.
+    baseline_mask = (np.ones(t, dtype=bool) if not revision else
+                     np.zeros(t, dtype=bool) if p.baseline_mask is None else p.baseline_mask)
     if revision:
         up = allocate("revision_up", (t,))
         down = allocate("revision_down", (t,))
@@ -201,10 +216,10 @@ def solve_mpc(problem: MPCProblem) -> MPCSolution:
     integrality[z] = 1
     if revision:
         ub[up], ub[down] = q_upper, p.previous_commitment
-        procurement_objective[up] = 1.5 * p.price
-        procurement_objective[down] = 0.5 * p.price
-    else:
-        procurement_objective[q] = p.price
+        ub[up[baseline_mask]], ub[down[baseline_mask]] = 0.0, 0.0
+        procurement_objective[up] = 1.5 * p.price * ~baseline_mask
+        procurement_objective[down] = 0.5 * p.price * ~baseline_mask
+    procurement_objective[q[baseline_mask]] = p.price[baseline_mask]
     objective += procurement_objective
     objective[e] = probability[:, None] * 5.0 * p.price
     objective[c] = probability[:, None] * p.throughput_penalty
@@ -247,6 +262,8 @@ def solve_mpc(problem: MPCProblem) -> MPCSolution:
             row([(variable[scenario, 0], 1), (variable[0, 0], -1)], 0, 0)
     if revision:
         for step in range(t):
+            if baseline_mask[step]:
+                continue
             row([(q[step], 1), (up[step], -1), (down[step], 1)],
                 p.previous_commitment[step], p.previous_commitment[step])
     if risk:
@@ -307,8 +324,10 @@ def solve_mpc(problem: MPCProblem) -> MPCSolution:
     solution.mode = solution.mode.astype(int)
     solution.revision_up = np.maximum(solution.commitment - p.previous_commitment, 0) if revision else np.zeros(t)
     solution.revision_down = np.maximum(p.previous_commitment - solution.commitment, 0) if revision else np.zeros(t)
-    solution.procurement_cost = float(p.price @ (1.5 * solution.revision_up + 0.5 * solution.revision_down)
-                                      if revision else p.price @ solution.commitment)
+    solution.revision_up[baseline_mask] = 0.0
+    solution.revision_down[baseline_mask] = 0.0
+    solution.procurement_cost = float(p.price @ (1.5 * solution.revision_up + 0.5 * solution.revision_down
+                                                + baseline_mask * solution.commitment))
     solution.scenario_cost = solution.procurement_cost + np.sum(solution.emergency * (5.0 * p.price), axis=1)
     solution.expected_cost = float(probability @ solution.scenario_cost)
     solution.terminal_cost = float(p.terminal_penalty * (probability @ np.abs(solution.soc[:, -1] - p.terminal_soc)))

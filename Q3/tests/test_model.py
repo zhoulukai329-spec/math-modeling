@@ -261,3 +261,16 @@ def test_nontight_revision_auxiliaries_do_not_inflate_returned_economic_cost(
         assert s.cvar == pytest.approx(0.0)
         assert s.cvar_eta == pytest.approx(0.0)
         np.testing.assert_allclose(s.cvar_excess, [0.0])
+
+
+def test_mixed_settlement_prices_virtual_future_purchase_at_baseline_rate(model):
+    p = problem(model, [2.0, 4.0, 3.0], previous_commitment=[1.0, 0.0, 3.0],
+                baseline_mask=[False, True, False], fixed_commitment=[np.nan, np.nan, 3.0],
+                charge_limit=0.0, discharge_limit=0.0, cvar_weight=1.0)
+    s = model.solve_mpc(p)
+    assert_physical(p, s)
+    np.testing.assert_allclose(s.commitment, [2.0, 4.0, 3.0])
+    np.testing.assert_allclose(s.revision_up, [1.0, 0.0, 0.0])
+    np.testing.assert_allclose(s.revision_down, 0.0)
+    assert s.procurement_cost == pytest.approx(1.5 + 4.0)
+    assert s.cvar == pytest.approx(5.5)
