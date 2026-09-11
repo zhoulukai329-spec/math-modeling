@@ -50,7 +50,7 @@ def build_causal_forecasts(load, pv, typical_load, typical_pv):
     return f, r, load_hat, pv_hat, load_resid, pv_resid
 
 
-def scenarios_for_day(d, f, load_resid, pv_resid, n_scenarios=8, lookback=28,
+def scenarios_for_day(d, f, load_resid, pv_resid, n_scenarios=12, lookback=28,
                       seed=2025):
     """生成第 d 天 0:00 可用的一组净负荷场景。
 

@@ -1,5 +1,6 @@
 import sys
 import unittest
+import inspect
 from pathlib import Path
 
 import numpy as np
@@ -10,13 +11,16 @@ if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
 import data_io as dio
+import forecast as fc
 import optimization as opt
 
 
 class DispatchPolicyTests(unittest.TestCase):
-    def test_first_stage_never_uses_emergency_while_charging(self):
-        import forecast as fc
+    def test_scenario_generator_defaults_to_twelve_scenarios(self):
+        default = inspect.signature(fc.scenarios_for_day).parameters["n_scenarios"].default
+        self.assertEqual(default, 12)
 
+    def test_first_stage_never_uses_emergency_while_charging(self):
         price, typical_load_kw, typical_pv_kw = dio.read_price_typical()
         _dates, _net, load, pv = dio.read_actual_data()
         f, _r, _lh, _ph, load_resid, pv_resid = fc.build_causal_forecasts(

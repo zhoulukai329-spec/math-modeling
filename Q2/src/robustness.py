@@ -157,7 +157,6 @@ def run_baselines(price, net, f):
     z = np.load(str(dio.SOLUTION_NPZ))
     planned2 = z["planned_cost"]
     emergency2 = z["emergency_cost"]
-    total2 = z["total_cost"]
     e2_all = z["e"]
 
     strategies = [
