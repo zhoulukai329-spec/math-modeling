@@ -120,3 +120,44 @@ python -m pytest Q3/tests/test_data_forecast.py -q
 ................                                                         [100%]
 16 passed in 0.50s
 ```
+
+## Review-fix round 2
+
+Added exact temporary-workbook tests for the Attachment 3 reader and complete
+`load_inputs()` orchestration.  They verify four releases per day in source
+order (00:00/06:00/12:00/18:00), exactly 24 horizon columns per release,
+forecast-date consistency with actual-data dates, and preservation of the
+source first/tail columns through the public loader.
+
+The PV reader now rejects incomplete/out-of-order release groups, duplicate or
+non-increasing dates, and any row that is not exactly 24 hourly values.  The
+public loader rejects forecast dates that differ from the actual-data calendar.
+
+`build_pv_scenarios()` now requires `operating_dates` and `issue_time` to be
+provided together (or both omitted), preventing a caller from combining a
+calendar-aware cutoff with an implicit synthetic row calendar.
+
+Red command/output before these changes:
+
+```powershell
+python -m pytest Q3/tests/test_data_forecast.py -q
+```
+
+```text
+3 failed, 18 passed in 0.93s
+```
+
+Final verification:
+
+```powershell
+python -m pytest Q3/tests/test_data_forecast.py -q
+```
+
+```text
+.....................                                                    [100%]
+21 passed in 0.70s
+```
+
+Real-input read-only smoke result: 365 operating days, 1,460 published PV
+releases, three `(365, 144)` data matrices, and unmodified template labels
+`0:10-0:20` through `0:00-0:10+1`.

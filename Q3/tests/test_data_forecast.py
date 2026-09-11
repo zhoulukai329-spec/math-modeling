@@ -213,3 +213,102 @@ def test_price_reader_rejects_date_mismatch():
 
         with pytest.raises(ValueError, match="price dates do not match"):
             dio._read_price(path, (date(2025, 1, 1),))
+
+
+def _write_actual_workbook(path, days):
+    book = Workbook()
+    ws_load = book.active
+    ws_load.title = "load"
+    ws_pv = book.create_sheet("pv")
+    for ws, offset in ((ws_load, 0), (ws_pv, 1_000)):
+        ws.append(_template_header())
+        for day_index, day in enumerate(days):
+            ws.append([day] + list(offset + day_index * 1_000 + np.arange(144)))
+    book.save(path)
+
+
+def _write_price_workbook(path, days):
+    book = Workbook()
+    ws = book.active
+    ws.append(_template_header())
+    for day_index, day in enumerate(days):
+        ws.append([day] + [day_index + 1.0] * 144)
+    book.save(path)
+
+
+def _write_forecast_workbook(path, days, *, invalid_date=None):
+    book = Workbook()
+    ws = book.active
+    ws.append(["date", "release"] + [f"h{i}" for i in range(1, 25)])
+    for day_index, day in enumerate(days):
+        source_day = invalid_date if invalid_date is not None and day_index == len(days) - 1 else day
+        for release_index, release in enumerate(("0:00", "6:00", "12:00", "18:00")):
+            ws.append([source_day if release_index == 0 else None, release]
+                      + list(100 * day_index + 10 * release_index + np.arange(1, 25)))
+    book.save(path)
+
+
+def test_pv_forecast_reader_preserves_four_releases_and_24_horizons():
+    days = (date(2025, 1, 1), date(2025, 1, 2))
+    with TemporaryDirectory(dir=Path(__file__).parent) as directory:
+        path = Path(directory) / "forecast.xlsx"
+        _write_forecast_workbook(path, days)
+        forecasts = dio._read_pv_forecasts(path)
+
+    assert list(forecasts) == [
+        (days[0], 0), (days[0], 360), (days[0], 720), (days[0], 1080),
+        (days[1], 0), (days[1], 360), (days[1], 720), (days[1], 1080),
+    ]
+    assert len(forecasts) == 8
+    np.testing.assert_allclose(forecasts[(days[1], 1080)], np.arange(131.0, 155.0))
+
+
+def test_load_inputs_checks_forecast_dates_and_keeps_source_order():
+    # Use the repository-local temporary root to avoid a locked system pytest
+    # directory on Windows.
+    days = (date(2025, 1, 1), date(2025, 1, 2))
+    with TemporaryDirectory(dir=Path(__file__).parent) as directory:
+        root = Path(directory)
+        (root / "附件5").mkdir()
+        _write_actual_workbook(root / "附件2.xlsx", days)
+        _write_price_workbook(root / "附件4.xlsx", days)
+        _write_forecast_workbook(root / "附件3.xlsx", days)
+        template = Workbook()
+        template.active.append(_template_header() + ["daily energy", "daily cost"])
+        template.save(root / "附件5" / "result3.xlsx")
+
+        inputs = dio.load_inputs(root)
+
+        assert inputs.dates == days
+        np.testing.assert_allclose(inputs.load_energy[1], (1_000 + np.arange(144)) / 6.0)
+        assert inputs.template_labels[0] == "0:10"
+        assert inputs.template_labels[-1] == "24:00"
+        assert len(inputs.pv_hourly_forecasts) == 8
+
+
+def test_load_inputs_rejects_forecast_date_not_in_actual_data():
+    days = (date(2025, 1, 1), date(2025, 1, 2))
+    with TemporaryDirectory(dir=Path(__file__).parent) as directory:
+        root = Path(directory)
+        (root / "附件5").mkdir()
+        _write_actual_workbook(root / "附件2.xlsx", days)
+        _write_price_workbook(root / "附件4.xlsx", days)
+        _write_forecast_workbook(root / "附件3.xlsx", days, invalid_date=date(2025, 1, 3))
+        template = Workbook()
+        template.active.append(_template_header() + ["daily energy", "daily cost"])
+        template.save(root / "附件5" / "result3.xlsx")
+
+        with pytest.raises(ValueError, match="PV forecast dates do not match"):
+            dio.load_inputs(root)
+
+
+@pytest.mark.parametrize("kwargs", [
+    {"operating_dates": (date(2025, 1, 1),)},
+    {"issue_time": datetime(2025, 1, 2)},
+])
+def test_pv_scenarios_reject_unpaired_calendar_arguments(kwargs):
+    with pytest.raises(ValueError, match="provided together"):
+        fc.build_pv_scenarios(
+            np.ones(1), np.zeros((1, 144)), issue_day_index=1, start_step=0,
+            horizon_steps=1, n_scenarios=1, lookback_days=1, **kwargs,
+        )

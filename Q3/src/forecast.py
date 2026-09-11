@@ -139,6 +139,8 @@ def build_pv_scenarios(
                         ("lookback_days", lookback_days)):
         if isinstance(value, bool) or not isinstance(value, (int, np.integer)) or value <= 0:
             raise ValueError(f"{name} must be a positive integer")
+    if (operating_dates is None) != (issue_time is None):
+        raise ValueError("operating_dates and issue_time must be provided together")
     point = np.asarray(point_pv_energy, dtype=float)
     residuals = np.asarray(pv_residuals, dtype=float)
     if point.shape != (horizon_steps,) or residuals.ndim != 2 or residuals.shape[1] != 144:

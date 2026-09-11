@@ -190,18 +190,36 @@ def _read_pv_forecasts(path: Path) -> dict[tuple[date, int], np.ndarray]:
         ws = book.worksheets[0]
         out: dict[tuple[date, int], np.ndarray] = {}
         current_day: date | None = None
+        current_releases: list[int] = []
+        last_day: date | None = None
+        expected_releases = [0, 6 * 60, 12 * 60, 18 * 60]
         for row in ws.iter_rows(min_row=2, values_only=True):
             if row[0] not in (None, ""):
-                current_day = coerce_date(row[0])
+                next_day = coerce_date(row[0])
+                if current_day is not None and current_releases != expected_releases:
+                    raise ValueError("each PV forecast day must contain releases 0:00, 6:00, 12:00, 18:00 in order")
+                if last_day is not None and next_day <= last_day:
+                    raise ValueError("PV forecast dates must be strictly increasing")
+                current_day = next_day
+                last_day = next_day
+                current_releases = []
             if current_day is None or row[1] in (None, ""):
                 raise ValueError("PV forecast row is missing its operating date or release time")
-            values = np.asarray(row[2:26], dtype=float)
+            if len(row) != 26:
+                raise ValueError("PV forecast row must have exactly 24 hourly columns")
+            release = parse_clock_minutes(row[1])
+            if len(current_releases) >= len(expected_releases) or release != expected_releases[len(current_releases)]:
+                raise ValueError("PV forecast releases must be 0:00, 6:00, 12:00, 18:00 in order")
+            values = np.asarray(row[2:], dtype=float)
             if values.shape != (24,):
                 raise ValueError("PV forecast row must have 24 hourly columns")
-            key = (current_day, parse_clock_minutes(row[1]))
+            key = (current_day, release)
             if key in out:
                 raise ValueError(f"duplicate PV forecast release {key}")
             out[key] = values
+            current_releases.append(release)
+        if current_day is None or current_releases != expected_releases:
+            raise ValueError("each PV forecast day must contain releases 0:00, 6:00, 12:00, 18:00 in order")
         return out
     finally:
         book.close()
@@ -229,5 +247,7 @@ def load_inputs(
     dates, load_energy, pv_energy = _read_actuals(root / "附件2.xlsx")
     price = _read_price(root / "附件4.xlsx", dates)
     forecasts = _read_pv_forecasts(root / "附件3.xlsx")
+    if {day for day, _release in forecasts} != set(dates):
+        raise ValueError("PV forecast dates do not match actual-data dates")
     labels = _read_template_labels(root / "附件5" / "result3.xlsx")
     return InputData(dates, load_energy, pv_energy, price, forecasts, labels)
