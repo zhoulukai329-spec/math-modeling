@@ -100,7 +100,8 @@ def main():
             text = replace_table(text, "### 7.4", forecast_table)
             text = replace_table(text, "### 7.6", table(["策略", "计划费(元)", "紧急费(元)", "总成本(元)", "相对无储能因果策略"], baseline_paper))
             text = replace_table(text, "## 8 ", robust_table)
-            text = text.replace("结果（待填入数值）表明", f"输出期总成本为 {fmt(z['total_cost'].sum(), 2)} 元，相对无储能因果策略降低 {saving:.2f}%。结果表明")
+            text = re.sub(r"结果（待填入数值）表明|输出期总成本为 [\d.]+ 元，相对无储能因果策略降低 [\d.]+%。结果表明",
+                          f"输出期总成本为 {fmt(z['total_cost'].sum(), 2)} 元，相对无储能因果策略降低 {saving:.2f}%。结果表明", text)
         else:
             text = replace_table(text, "四种简单预测方法的误差如下", table(["预测方法", "平均误差 MAE (kW)", "RMSE (kW)"],
                                  [[r["方法"], fmt(r["MAE_kW"], 2), fmt(r["RMSE_kW"], 2)] for r in forecasts]))
@@ -116,7 +117,8 @@ def main():
                 text = text[:start]+section+text[end:]
             text = replace_table(text, '#### 怎么公平', table(["策略", "计划费(元)", "紧急费(元)", "总成本(元)"], baseline_rows))
             text = text.replace("可以看到大多数天紧急购电费是 0，少数预测不准的日子会突然变高", "输出期 334 天均有紧急购电，费用随预测误差和调度情况变化")
-            text = text.replace("这组对比能说明电池和滚动计划确实帮微网省了不少钱。", f"当前随机策略相对无储能因果策略降低总成本 {saving:.2f}%。")
+            text = re.sub(r"这组对比能说明电池和滚动计划确实帮微网省了不少钱。|当前随机策略相对无储能因果策略降低总成本 [\d.]+%。",
+                          f"当前随机策略相对无储能因果策略降低总成本 {saving:.2f}%。", text)
         if "待填" in text or "待重跑" in text:
             raise ValueError(f"Unfilled report: {filename}")
         validate_markdown_tables(text)
