@@ -166,3 +166,76 @@ No unresolved correctness concerns within Task 2. Operational handoff:
   end-of-data horizons and maintain true SOC. The model cannot infer timestamps.
 - Real-data smoke optimization, calibration, independent P1 review and full-year
   runtime remain later tasks; this report makes no claims about their completion.
+
+## Review-fix round 1
+
+Addressed both Important review findings. These changes and the regression
+tests are committed together with this report update; use `git log -1 --
+Q3/src/model.py` for the immutable fix commit.
+
+### Rounded incumbent feasibility
+
+The decoder now copies the finite solver vector, records its original objective
+and integrality residual, rounds binary mode entries, and checks every bound,
+linear row and binary value on that complete rounded vector. Continuous actions
+are not silently adjusted. Any violation above absolute `1e-5` rejects the
+incumbent and returns `has_solution=False` with no execution arrays. A candidate
+also must have been within the original integrality tolerance before rounding.
+
+New regression cases use solver candidates that satisfy every original linear
+row and are only `5e-6` away from integral modes. One has `0.004` kWh charge with
+a mode rounding to zero; the other has `0.004` kWh each of discharge/emergency
+with a mode rounding to one. Both must be rejected because the rounded vector
+violates the mode constraints by `0.004`, despite the original vector's small
+integrality residual. The diagnostic row violation now describes exactly the
+rounded candidate that would otherwise be returned.
+
+### Authoritative monetary costs and CVaR
+
+Revision quantities are reconstructed as the positive/negative parts of returned
+commitment minus the immediate previous commitment. Procurement cost is now
+computed from those quantities, or directly from baseline commitment and price.
+Neither result depends on potentially loose up/down auxiliaries.
+
+Scenario monetary losses and expected cost use the reconstructed procurement
+cost plus returned emergency quantities. For risk-enabled problems, the decoder
+computes the weighted alpha quantile of these losses, then their nonnegative
+excess above that quantile, yielding the actual finite-scenario CVaR. Terminal
+and throughput penalties continue to use returned SOC/actions. Public
+`objective` is rebuilt from these authoritative expected costs, regularizers
+and weighted CVaR.
+
+`diagnostics.solver_objective` retains the original modeled incumbent objective;
+`mip_gap` and `mip_dual_bound` remain unmodified solver diagnostics associated
+with that original optimization report. They are not presented as recomputed
+gaps for the canonicalized monetary objective.
+
+The added economic regression supplies a feasible nonoptimal candidate with
+unchanged commitment but redundant `up=down=1`. Without CVaR its original
+modeled objective is 2; with CVaR weight 2 and a loose eta it is 6. In both cases
+the authoritative revision charge, expected cost and returned objective are
+zero; in the latter case returned CVaR/eta/excess are also zero.
+
+### Red/green evidence
+
+Before changing production code:
+
+```text
+python -m pytest Q3/tests/test_model.py -q
+4 failed, 23 passed in 0.91s
+```
+
+The two rounding cases failed because invalid candidates were accepted. The
+two auxiliary-slack cases failed because procurement cost was 2 instead of 0.
+
+After the fix:
+
+```text
+python -m pytest Q3/tests/test_model.py -q
+27 passed in 0.60s
+python -m pytest Q3/tests -q
+48 passed in 1.16s
+```
+
+`git diff --check` passed. No unresolved review concerns remain in this round;
+the original scope and later-task runtime/causality handoff limitations apply.

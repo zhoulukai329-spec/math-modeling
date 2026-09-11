@@ -111,8 +111,10 @@ class MPCSolution:
     """Decoded feasible incumbent, or explicit missing arrays on solver failure.
 
     A limit-stopped solve can have ``has_solution=True, optimal=False``. Such
-    an incumbent is returned only after bounds, rows and integrality pass an
-    absolute 1e-5 tolerance check. Diagnostics preserve solver status/gap.
+    an incumbent is returned only after its binary modes are rounded and the
+    full rounded vector passes bounds, rows and integrality at absolute 1e-5.
+    Monetary costs, CVaR and objective are reconstructed from returned decisions;
+    diagnostics preserve the raw solver objective, status and gap separately.
     """
     has_solution: bool
     optimal: bool
@@ -277,9 +279,14 @@ def solve_mpc(problem: MPCProblem) -> MPCSolution:
     x = getattr(result, "x", None)
     has_solution = solver_status in (0, 1) and x is not None
     if has_solution:
-        x = np.asarray(x, dtype=float)
+        x = np.array(x, dtype=float, copy=True)
         has_solution = x.shape == (size,) and bool(np.isfinite(x).all())
     if has_solution:
+        diagnostics["solver_objective"] = float(objective @ x)
+        raw_integer_violation = float(np.max(np.abs(x[z] - np.rint(x[z]))))
+        x[z] = np.rint(x[z])
+        # A near-integer mode can permit material c/d/e through a large bound.
+        # Validate the actual rounded mode with all unchanged continuous actions.
         activity = matrix @ x
         bound_violation = max(0.0, float(np.max(lb - x)), float(np.max(x - ub)))
         constraint_violation = max(0.0, float(np.max(constraint_lower - activity)),
@@ -287,25 +294,34 @@ def solve_mpc(problem: MPCProblem) -> MPCSolution:
         integer_violation = float(np.max(np.abs(x[z] - np.rint(x[z]))))
         diagnostics.update(max_bound_violation=bound_violation,
                            max_constraint_violation=constraint_violation,
-                           max_integrality_violation=integer_violation)
-        has_solution = max(bound_violation, constraint_violation, integer_violation) <= 1e-5
+                           max_integrality_violation=integer_violation,
+                           raw_max_integrality_violation=raw_integer_violation)
+        has_solution = max(bound_violation, constraint_violation,
+                           integer_violation, raw_integer_violation) <= 1e-5
     diagnostics["incumbent_accepted"] = bool(has_solution)
     solution = MPCSolution(bool(has_solution), bool(has_solution and solver_status == 0), status, diagnostics)
     if not has_solution:
         return solution
     for name in ("commitment", "charge", "discharge", "emergency", "spill", "soc", "mode"):
         setattr(solution, name, x[indices[name]].copy())
-    solution.mode = np.rint(solution.mode).astype(int)
+    solution.mode = solution.mode.astype(int)
     solution.revision_up = np.maximum(solution.commitment - p.previous_commitment, 0) if revision else np.zeros(t)
     solution.revision_down = np.maximum(p.previous_commitment - solution.commitment, 0) if revision else np.zeros(t)
-    solution.procurement_cost = float(procurement_objective @ x)
+    solution.procurement_cost = float(p.price @ (1.5 * solution.revision_up + 0.5 * solution.revision_down)
+                                      if revision else p.price @ solution.commitment)
     solution.scenario_cost = solution.procurement_cost + np.sum(solution.emergency * (5.0 * p.price), axis=1)
     solution.expected_cost = float(probability @ solution.scenario_cost)
     solution.terminal_cost = float(p.terminal_penalty * (probability @ np.abs(solution.soc[:, -1] - p.terminal_soc)))
     solution.throughput_cost = float(p.throughput_penalty * np.sum(probability[:, None] * (solution.charge + solution.discharge)))
-    solution.objective = float(objective @ x)
     if risk:
-        solution.cvar_eta = float(x[eta])
-        solution.cvar_excess = x[excess].copy()
-        solution.cvar = float(x[eta] + (probability @ x[excess]) / (1.0 - p.cvar_alpha))
+        # Tighten the CVaR representation of the authoritative economic losses.
+        # A time-limited incumbent's auxiliary up/down, eta and excess variables
+        # need not be tight, even when its returned physical decision is feasible.
+        order = np.argsort(solution.scenario_cost)
+        quantile_index = min(int(np.searchsorted(np.cumsum(probability[order]), p.cvar_alpha)), k - 1)
+        solution.cvar_eta = float(solution.scenario_cost[order[quantile_index]])
+        solution.cvar_excess = np.maximum(solution.scenario_cost - solution.cvar_eta, 0.0)
+        solution.cvar = float(solution.cvar_eta + (probability @ solution.cvar_excess) / (1.0 - p.cvar_alpha))
+    solution.objective = (solution.expected_cost + solution.terminal_cost + solution.throughput_cost
+                          + (p.cvar_weight * solution.cvar if risk else 0.0))
     return solution

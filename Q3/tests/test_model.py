@@ -203,3 +203,61 @@ def test_time_limit_with_real_feasible_incumbent_can_be_executed(model, monkeypa
     assert s.diagnostics["timed_out"] is True
     assert s.diagnostics["max_constraint_violation"] < 1e-6
     assert s.commitment[0] == pytest.approx(1.0)
+
+
+@pytest.mark.parametrize("z, charge, discharge, emergency, load, initial", [
+    (5e-6, 0.004, 0.0, 0.0, 1.0, 0.0),
+    (1.0 - 5e-6, 0.0, 0.004, 0.004, 1000.0, 1.0),
+])
+def test_rounded_modes_must_still_satisfy_full_incumbent_constraints(
+        model, monkeypatch, z, charge, discharge, emergency, load, initial):
+    p = problem(model, [load], initial_soc=initial, charge_limit=1000.0,
+                discharge_limit=1000.0)
+    final_soc = initial + 0.9 * charge - discharge / 0.9
+    # One-step backend order: g,c,d,e,w,z,E0,E1,terminal deviation.
+    candidate = np.array([load + charge - discharge - emergency,
+                          charge, discharge, emergency, 0.0, z,
+                          initial, final_soc, abs(final_soc)])
+    def limited(**kwargs):
+        # This input passes the original check but its rounded mode does not.
+        rows = kwargs["constraints"]
+        activity = rows.A @ candidate
+        assert np.all(activity >= rows.lb - 1e-9)
+        assert np.all(activity <= rows.ub + 1e-9)
+        return SimpleNamespace(status=1, message="Time limit reached", x=candidate, fun=None)
+    monkeypatch.setattr(model, "milp", limited)
+    s = model.solve_mpc(p)
+    assert not s.has_solution
+    assert s.mode is None and s.charge is None and s.commitment is None
+    assert s.diagnostics["max_constraint_violation"] == pytest.approx(0.004)
+
+
+@pytest.mark.parametrize("cvar_weight", [0.0, 2.0])
+def test_nontight_revision_auxiliaries_do_not_inflate_returned_economic_cost(
+        model, monkeypatch, cvar_weight):
+    p = problem(model, [1.0], previous_commitment=[1.0], fixed_commitment=[1.0],
+                charge_limit=0.0, discharge_limit=0.0, cvar_weight=cvar_weight)
+    # Physical decision is unchanged. Up=down=1 are feasible but redundant;
+    # eta=2 (when present) covers their inflated modeled monetary loss.
+    candidate = np.array([1.0, 0, 0, 0, 0, 0, 0, 0, 0, 1.0, 1.0]
+                         + ([2.0, 0.0] if cvar_weight else []))
+    def limited(**kwargs):
+        rows = kwargs["constraints"]
+        activity = rows.A @ candidate
+        assert np.all(activity >= rows.lb - 1e-9)
+        assert np.all(activity <= rows.ub + 1e-9)
+        return SimpleNamespace(status=1, message="Time limit reached", x=candidate,
+                               fun=float(kwargs["c"] @ candidate))
+    monkeypatch.setattr(model, "milp", limited)
+    s = model.solve_mpc(p)
+    assert s.has_solution and not s.optimal
+    assert s.revision_up[0] == 0 and s.revision_down[0] == 0
+    assert s.procurement_cost == pytest.approx(0.0)
+    np.testing.assert_allclose(s.scenario_cost, [0.0])
+    assert s.expected_cost == pytest.approx(0.0)
+    assert s.objective == pytest.approx(0.0)
+    assert s.diagnostics["solver_objective"] == pytest.approx(2.0 * (1.0 + cvar_weight))
+    if cvar_weight:
+        assert s.cvar == pytest.approx(0.0)
+        assert s.cvar_eta == pytest.approx(0.0)
+        np.testing.assert_allclose(s.cvar_excess, [0.0])
