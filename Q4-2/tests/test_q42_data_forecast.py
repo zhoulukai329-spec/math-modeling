@@ -24,11 +24,10 @@ class DynamicPriceDataTests(unittest.TestCase):
 
     def test_price_forecast_is_causal_and_uses_weekly_seasonality(self):
         price = np.arange(10 * dio.N, dtype=float).reshape(10, dio.N)
-        typical = np.full(dio.N, 3.0)
-        forecast, residual = fc.build_causal_price_forecasts(price, typical)
+        forecast, residual = fc.build_causal_price_forecasts(price)
 
         self.assertEqual(forecast[0, 0], price[0, 0])
-        np.testing.assert_array_equal(forecast[0, 1:], typical[1:])
+        np.testing.assert_array_equal(forecast[0], np.full(dio.N, price[0, 0]))
         self.assertEqual(forecast[4, 0], price[4, 0])
         np.testing.assert_array_equal(forecast[4, 1:], price[:4, 1:].mean(axis=0))
         self.assertEqual(forecast[8, 0], price[8, 0])
@@ -37,10 +36,14 @@ class DynamicPriceDataTests(unittest.TestCase):
 
         changed = price.copy()
         changed[8:] += 1_000_000.0
-        changed_forecast, _ = fc.build_causal_price_forecasts(changed, typical)
+        changed_forecast, _ = fc.build_causal_price_forecasts(changed)
         np.testing.assert_array_equal(changed_forecast[:8], forecast[:8])
         self.assertEqual(changed_forecast[8, 0], changed[8, 0])
         np.testing.assert_array_equal(changed_forecast[8, 1:], forecast[8, 1:])
+
+    def test_q42_has_no_attachment1_input(self):
+        self.assertFalse(hasattr(dio, "ATTACH1"))
+        self.assertFalse(hasattr(dio, "read_price_typical"))
 
     def test_joint_scenarios_share_the_same_historical_day(self):
         d = 5

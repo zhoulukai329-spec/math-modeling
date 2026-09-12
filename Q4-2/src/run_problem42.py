@@ -80,16 +80,19 @@ def simulate_days(net, price_actual, net_forecast, price_forecast,
 
 
 def _inputs():
-    typical_price, typical_load_kw, typical_pv_kw = dio.read_price_typical()
     dates, net, load, pv = dio.read_actual_data()
-    price_dates, price_actual = dio.read_dynamic_prices(first_price=typical_price[0])
+    price_dates, price_actual = dio.read_dynamic_prices()
     if not np.array_equal(dates, price_dates):
         raise ValueError("附件2与附件4日期不一致")
+    # Q4 names only Attachments 2 and 4 for the Q2 recalculation. With no
+    # history before 2025-01-01, use a neutral zero prior for that warm-up day;
+    # every later forecast is built solely from already observed Attachment 2.
+    zero_prior = np.zeros(dio.N)
     net_f, _r, _lh, _ph, load_r, pv_r = fc.build_causal_forecasts(
-        load, pv, typical_load_kw * dio.DT, typical_pv_kw * dio.DT
+        load, pv, zero_prior, zero_prior
     )
     net_r = load_r - pv_r
-    price_f, price_r = fc.build_causal_price_forecasts(price_actual, typical_price)
+    price_f, price_r = fc.build_causal_price_forecasts(price_actual)
     return dates, net, price_actual, net_f, price_f, net_r, price_r
 
 

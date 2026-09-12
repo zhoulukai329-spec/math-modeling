@@ -48,12 +48,11 @@ def check_solution(z):
 
 
 def check_causality():
-    typical, _, _ = dio.read_price_typical()
-    _, actual = dio.read_dynamic_prices(first_price=typical[0])
-    predicted, _ = fc.build_causal_price_forecasts(actual, typical)
+    _, actual = dio.read_dynamic_prices()
+    predicted, _ = fc.build_causal_price_forecasts(actual)
     changed = actual.copy()
     changed[100:] += 1000.0
-    predicted_changed, _ = fc.build_causal_price_forecasts(changed, typical)
+    predicted_changed, _ = fc.build_causal_price_forecasts(changed)
     if not np.array_equal(predicted[:100], predicted_changed[:100]):
         raise AssertionError("改变未来真实电价影响了此前预测")
     if not np.array_equal(predicted[100,1:], predicted_changed[100,1:]):

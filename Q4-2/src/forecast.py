@@ -23,16 +23,17 @@ _q2_forecast = _load_q2_forecast()
 build_causal_forecasts = _q2_forecast.build_causal_forecasts
 
 
-def build_causal_price_forecasts(price_actual, typical_price):
+def build_causal_price_forecasts(price_actual):
     """Forecast each day using only prices observed before that day's 00:00."""
     price_actual = np.asarray(price_actual, dtype=float)
-    typical_price = np.asarray(typical_price, dtype=float)
-    if price_actual.ndim != 2 or typical_price.shape != (price_actual.shape[1],):
-        raise ValueError("电价实际矩阵或典型日电价形状错误")
+    if price_actual.ndim != 2:
+        raise ValueError("电价实际矩阵形状错误")
     forecast = np.empty_like(price_actual)
     for d in range(price_actual.shape[0]):
         if d == 0:
-            forecast[d] = typical_price
+            # No earlier price history exists. Persistence of the quote known
+            # at 00:00 is the only data-causal prior available in Attachment 4.
+            forecast[d] = price_actual[d, 0]
         elif d < 7:
             forecast[d] = price_actual[:d].mean(axis=0)
         else:

@@ -43,7 +43,6 @@ EMERGENCY_MULT = _q2.EMERGENCY_MULT
 THROUGHPUT_PENALTY = _q2.THROUGHPUT_PENALTY
 SOC_TOL = 1e-5
 
-ATTACH1 = ATTACH_DIR / "附件1.xlsx"
 ATTACH2 = ATTACH_DIR / "附件2.xlsx"
 ATTACH4 = ATTACH_DIR / "附件4.xlsx"
 TEMPLATE42 = ATTACH_DIR / "附件5" / "result4-2.xlsx"
@@ -56,7 +55,6 @@ TEMPLATE2 = TEMPLATE42
 RESULT2 = RESULT42
 
 excel_serial_to_date = _q2.excel_serial_to_date
-read_price_typical = _q2.read_price_typical
 read_actual_data = _q2.read_actual_data
 terminal_value = _q2.terminal_value
 time_label = _q2.time_label
@@ -102,6 +100,8 @@ def read_dynamic_prices(first_price=None):
         raise ValueError("附件4出现负电价，当前题目费用模型未定义该情形")
 
     if first_price is None:
-        typical_price, _, _ = read_price_typical()
-        first_price = typical_price[0]
+        # Attachment 4 has no 2025-01-01 00:00 quote. Use its nearest
+        # available quote only for this single boundary cell; no Attachment 1
+        # series is introduced into Q4-2.
+        first_price = raw[0, 0]
     return dates, align_price_cross_day(raw, first_price)
