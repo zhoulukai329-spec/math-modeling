@@ -39,6 +39,16 @@ def build_parser():
 
 def main(argv=None):
     args = build_parser().parse_args(argv)
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+    phase = "startup"
+
+    def progress(row):
+        message = dict(phase=phase, **row)
+        print(json.dumps(message, ensure_ascii=False), flush=True)
+        (args.output_dir / "progress.json").write_text(
+            json.dumps(message, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+    progress(dict(event="started", mode=args.mode))
     full = args.mode == "full"
     config = SimulationConfig(
         attachment_dir=args.attachment_dir,
@@ -56,20 +66,36 @@ def main(argv=None):
     start = "2025-01-01" if full else args.date_start
     from dispatch_core.workbook_contract import preflight_template
     preflight_template(args.attachment_dir / "附件5/result4-3.xlsx", args.output_dir / "result4-3.xlsx")
-    result = simulate(config, start, end)
+    phase = "simulation"
+    progress(dict(event="started", mode=args.mode, date_start=start, date_end=end))
+    result = simulate(config, start, end, progress=progress)
+    progress(dict(event="completed", executed_steps=int(result.executed.sum()),
+                  elapsed_seconds=result.elapsed_seconds))
     if full:
         result = trim_result(result, args.date_start)
+    phase = "result_verification"
+    progress(dict(event="started", target="simulation_result"))
     report = verify_solution43(result)
     if not report["passed"]:
         raise RuntimeError(f"Q4-3 simulation verification failed: {report['errors']}")
+    progress(dict(event="completed", target="simulation_result", passed=True))
+    phase = "saving_outputs"
+    progress(dict(event="started"))
     paths = save_result43(result, args.output_dir, prefix=args.mode,
                           template_path=args.attachment_dir / "附件5" / "result4-3.xlsx")
+    progress(dict(event="completed", outputs={key: str(value) for key, value in paths.items()}))
+    phase = "result_verification"
+    progress(dict(event="started", target="workbook"))
     report = verify_solution43(result, workbook_path=paths["workbook"],
                                template_path=args.attachment_dir / "附件5" / "result4-3.xlsx")
     verification_path = args.output_dir / f"{args.mode}_verification.json"
     verification_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     if not report["passed"]:
         raise RuntimeError(f"Q4-3 workbook verification failed: {report['errors']}")
+    progress(dict(event="completed", target="workbook", passed=True))
+    phase = "complete"
+    progress(dict(event="completed", mode=args.mode, executed_steps=int(result.executed.sum()),
+                  total_cost=result.total_cost, verification_passed=True))
     print(json.dumps({
         "mode": args.mode, "backend": args.backend,
         "executed_steps": int(result.executed.sum()), "solve_count": len(result.solve_log),
