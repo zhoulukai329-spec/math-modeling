@@ -32,12 +32,10 @@ MONTE_CARLO_CSV = dio.OUTPUT_DIR / "monte_carlo_results.csv"
 
 
 def _load_context():
-    price, load_typ_kw, pv_typ_kw = dio.read_price_typical()
+    price = dio.read_price()
     dates, load_raw, pv_raw = dio._read_attachment2_matrices()
-    typical_load = load_typ_kw * dio.DT
-    typical_pv = pv_typ_kw * dio.DT
     v_terminal = dio.terminal_value(price)
-    return price, dates, load_raw, pv_raw, load_typ_kw, typical_load, typical_pv, v_terminal
+    return price, dates, load_raw, pv_raw, v_terminal
 
 
 def _build_load_pv(load_raw, pv_raw, first_load_kw, first_pv_kw=0.0):
@@ -47,10 +45,10 @@ def _build_load_pv(load_raw, pv_raw, first_load_kw, first_pv_kw=0.0):
     return load_kw * dio.DT, pv_kw * dio.DT
 
 
-def _run_case(price, load, pv, typical_load, typical_pv, v_terminal, label):
+def _run_case(price, load, pv, v_terminal, label):
     net = load - pv
     f, r, load_hat, pv_hat, load_resid, pv_resid = fc.build_causal_forecasts(
-        load, pv, typical_load, typical_pv
+        load, pv
     )
     print(f"\n—— 运行插补方案：{label} ——")
     sim = simulate_days(
@@ -75,29 +73,28 @@ def _run_case(price, load, pv, typical_load, typical_pv, v_terminal, label):
     }
 
 
-def run_imputation_sensitivity(price, load_raw, pv_raw, load_typ_kw,
-                               typical_load, typical_pv, v_terminal):
+def run_imputation_sensitivity(price, load_raw, pv_raw, v_terminal):
     extrap = 2.0 * load_raw[0, 0] - load_raw[0, 1]  # 线性外推 3449.9305
-    typical0 = load_typ_kw[0]                        # 附件1 典型 3444.7259
     hold0 = load_raw[0, 0]                           # 向后持有 3529.7296
+    zero0 = 0.0
 
     cases = [
         ("线性外推(主方案)", extrap),
-        ("附件1典型值", typical0),
         ("向后持有0:10", hold0),
+        ("零值边界", zero0),
     ]
 
     print("=" * 82)
     print("问题 2 · 1 月 1 日 0:00 插补敏感性检验")
     print(f"三种 1 月 1 日 0:00 负荷取值: 线性外推={extrap:.4f}, "
-          f"典型={typical0:.4f}, 向后持有={hold0:.4f} kW（光伏均取 0）")
+          f"向后持有={hold0:.4f}, 零值={zero0:.4f} kW（光伏均取 0）")
     print("=" * 82)
 
     results = []
     main_sim = None
     for label, first_load in cases:
         load, pv = _build_load_pv(load_raw, pv_raw, first_load)
-        r = _run_case(price, load, pv, typical_load, typical_pv, v_terminal, label)
+        r = _run_case(price, load, pv, v_terminal, label)
         results.append(r)
         if main_sim is None:
             main_sim = r
@@ -151,11 +148,10 @@ def run_imputation_sensitivity(price, load_raw, pv_raw, load_typ_kw,
     return main_sim, results
 
 
-def run_residual_monte_carlo(price, load, pv, typical_load, typical_pv,
-                             v_terminal, main_sim):
+def run_residual_monte_carlo(price, load, pv, v_terminal, main_sim):
     net = load - pv
     f, r, load_hat, pv_hat, load_resid, pv_resid = fc.build_causal_forecasts(
-        load, pv, typical_load, typical_pv
+        load, pv
     )
     day_idx = np.linspace(OUTPUT_START_DAY, net.shape[0] - 1,
                           MONTE_CARLO_N_DAYS, dtype=int)
@@ -204,13 +200,12 @@ def run_residual_monte_carlo(price, load, pv, typical_load, typical_pv,
 
 
 def main():
-    price, dates, load_raw, pv_raw, load_typ_kw, typical_load, typical_pv, v_terminal = _load_context()
+    price, dates, load_raw, pv_raw, v_terminal = _load_context()
     main_sim, results = run_imputation_sensitivity(
-        price, load_raw, pv_raw, load_typ_kw, typical_load, typical_pv, v_terminal
+        price, load_raw, pv_raw, v_terminal
     )
     run_residual_monte_carlo(
-        price, main_sim["load"], main_sim["pv"],
-        typical_load, typical_pv, v_terminal, main_sim,
+        price, main_sim["load"], main_sim["pv"], v_terminal, main_sim,
     )
     print("\n插补敏感性检验与蒙特卡洛全部完成。")
 

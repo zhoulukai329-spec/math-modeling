@@ -65,12 +65,10 @@ def output_stat(planned, emergency, e_all, full_year_mask):
 
 
 def _load_context():
-    price, load_kw_typ, pv_kw_typ = dio.read_price_typical()
+    price = dio.read_price()
     dates, net, load, pv = dio.read_actual_data()
-    typical_load = load_kw_typ * dio.DT
-    typical_pv = pv_kw_typ * dio.DT
     f, r, load_hat, pv_hat, load_resid, pv_resid = fc.build_causal_forecasts(
-        load, pv, typical_load, typical_pv
+        load, pv
     )
     v = dio.terminal_value(price)
     return price, dates, net, load, pv, f, load_resid, pv_resid, v

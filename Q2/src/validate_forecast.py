@@ -67,7 +67,6 @@ def evaluate(name, forecast_func, net, target_days):
 
 
 def main():
-    _, load_kw_typ, pv_kw_typ = dio.read_price_typical()
     dates, net, load, pv = dio.read_actual_data()
     target_days = list(range(OUTPUT_START_DAY, len(net)))
 

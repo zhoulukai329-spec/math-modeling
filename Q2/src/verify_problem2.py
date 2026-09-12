@@ -84,20 +84,18 @@ def check_continuity_and_cost(z):
 
 
 def check_causality():
-    price, load_kw, pv_kw = dio.read_price_typical()
+    price = dio.read_price()
     dates, net, load, pv = dio.read_actual_data()
-    typical_load = load_kw * dio.DT
-    typical_pv = pv_kw * dio.DT
     f, r, load_hat, pv_hat, load_resid, pv_resid = fc.build_causal_forecasts(
-        load, pv, typical_load, typical_pv
+        load, pv
     )
     ok = True
     print("\n[3] 预测因果性抽查")
     for d in [31, 100, 200, 300, 364]:
         # 场景生成只能使用 <d 的历史；这里检查负载/光伏点预测不引用未来行。
         if d == 0:
-            ok &= np.allclose(load_hat[d], typical_load)
-            ok &= np.allclose(pv_hat[d], typical_pv)
+            ok &= np.allclose(load_hat[d], 0.0)
+            ok &= np.allclose(pv_hat[d], 0.0)
         elif d < 7:
             ok &= np.allclose(load_hat[d], load[:d].mean(axis=0))
             ok &= np.allclose(pv_hat[d], pv[:d].mean(axis=0))
@@ -201,6 +199,9 @@ def main():
     print("问题 2 模型检验")
     print("=" * 76)
     z = np.load(str(dio.SOLUTION_NPZ))
+    if ("forecast_initialization" not in z.files
+            or str(z["forecast_initialization"][0]) != "zero_no_attachment1"):
+        raise ValueError("当前NPZ属于旧模型，尚未按附件1仅使用电价的口径重跑")
     ok1 = check_primal(z)
     ok2 = check_continuity_and_cost(z)
     ok3 = check_causality()

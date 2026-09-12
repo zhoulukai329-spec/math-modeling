@@ -2,7 +2,7 @@
 """问题 2 的因果负载/光伏预测与场景生成。
 
 预测规则只使用"当天 0:00 之前"的历史数据，且分别对负载与光伏建模：
-  - d == 0: 用附件 1 的典型日负载/光伏作为初始先验；
+  - d == 0: 没有历史数据，使用不引入外部附件的零先验；
   - 1 <= d < 7: 用此前所有历史日的平均负载/光伏；
   - d >= 7: 用上周同一天的负载/光伏（周周期明显，MAE 最低）。
 
@@ -13,15 +13,12 @@
 import numpy as np
 
 
-def build_causal_forecasts(load, pv, typical_load, typical_pv):
+def build_causal_forecasts(load, pv):
     """分别生成 0..D-1 每日的因果负载/光伏点预测与残差，再合成净负荷。
 
     参数:
       load:         (D,144) 全年实际负载能量 (kWh)
       pv:           (D,144) 全年实际光伏能量 (kWh)
-      typical_load: (144,) 附件 1 典型日负载能量 (kWh)
-      typical_pv:   (144,) 附件 1 典型日光伏能量 (kWh)
-
     返回:
       f:          (D,144) 净负荷点预测 = load_hat - pv_hat
       r:          (D,144) 净负荷残差   = load_resid - pv_resid
@@ -35,8 +32,8 @@ def build_causal_forecasts(load, pv, typical_load, typical_pv):
     pv_hat = np.zeros_like(pv)
     for d in range(D):
         if d == 0:
-            load_hat[d] = typical_load
-            pv_hat[d] = typical_pv
+            load_hat[d] = 0.0
+            pv_hat[d] = 0.0
         elif d < 7:
             load_hat[d] = load[:d].mean(axis=0)
             pv_hat[d] = pv[:d].mean(axis=0)

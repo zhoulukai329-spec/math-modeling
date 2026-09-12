@@ -127,13 +127,11 @@ def simulate_days(net, price, f, load_resid, pv_resid,
 def main():
     t0 = time.time()
 
-    price, load_typical_kw, pv_typical_kw = dio.read_price_typical()
+    price = dio.read_price()
     dates, net, load, pv = dio.read_actual_data()
-    typical_load = load_typical_kw * dio.DT
-    typical_pv = pv_typical_kw * dio.DT
 
     f, r, load_hat, pv_hat, load_resid, pv_resid = fc.build_causal_forecasts(
-        load, pv, typical_load, typical_pv
+        load, pv
     )
     v_terminal = dio.terminal_value(price)
 
@@ -181,6 +179,7 @@ def main():
         first_expected_emergency=sim["first_expected_emergency"][mask],
         v_terminal=np.array([v_terminal]),
         n_scenarios=np.array([N_SCENARIOS]),
+        forecast_initialization=np.array(["zero_no_attachment1"]),
         eta=np.array([dio.ETA_C, dio.ETA_D]),
     )
     print(f"结果已保存: {dio.SOLUTION_NPZ}")

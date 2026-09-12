@@ -66,27 +66,24 @@ def _parse_time_fraction(t):
     return int(hh) * 60 + int(mm) + offset
 
 
-def read_price_typical():
-    """读附件 1 的固定日内电价，并转成自然时钟顺序。
+def read_price():
+    """只读附件1的固定日内电价，并转成自然时钟顺序。
 
     返回 price: shape (144,)，price[k] 对应 [10k,10(k+1)] 分钟区间。
+    问题2不使用附件1中的负载和光伏列。
     """
     rows = xr.read_sheet_rows(str(ATTACH1))["Sheet1"]
     data = rows[1:]
     assert len(data) == 144, f"附件1 期望 144 行，实际 {len(data)}"
     t_min = np.array([_parse_time_fraction(r[0]) for r in data], dtype=float)
     price_raw = np.array([float(r[1]) for r in data], dtype=float)
-    load_raw = np.array([float(r[2]) for r in data], dtype=float)
-    pv_raw = np.array([float(r[3]) for r in data], dtype=float)
     assert t_min[0] == 10 and t_min[-1] == 1440
     assert np.all(np.diff(t_min) == 10)
     # 附件 1 是单条周期化典型日曲线：末行 '0:00+1' 与首行 0:10 属于同一天的
     # 循环首尾，因此右移一格即把 '0:00+1' 正确放回当天 0:00 位置。
     # （这与附件 2 的跨日拼接不同：附件 2 的 '0:00+1' 属于下一天，不能循环右移。）
     price = np.roll(price_raw, 1)
-    load_kw = np.roll(load_raw, 1)
-    pv_kw = np.roll(pv_raw, 1)
-    return price, load_kw, pv_kw
+    return price
 
 
 def _read_attachment2_matrices():

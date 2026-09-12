@@ -21,10 +21,10 @@ class DispatchPolicyTests(unittest.TestCase):
         self.assertEqual(default, 12)
 
     def test_first_stage_never_uses_emergency_while_charging(self):
-        price, typical_load_kw, typical_pv_kw = dio.read_price_typical()
+        price = dio.read_price()
         _dates, _net, load, pv = dio.read_actual_data()
         f, _r, _lh, _ph, load_resid, pv_resid = fc.build_causal_forecasts(
-            load, pv, typical_load_kw * dio.DT, typical_pv_kw * dio.DT
+            load, pv
         )
         scenarios = fc.scenarios_for_day(
             31, f, load_resid, pv_resid,
@@ -37,6 +37,17 @@ class DispatchPolicyTests(unittest.TestCase):
 
         self.assertEqual(result["model_type"], "two_stage_stochastic_milp")
         self.assertEqual(result["stats"]["emergency_charge_overlap"], 0)
+
+    def test_attachment1_exposes_price_only(self):
+        self.assertEqual(dio.read_price().shape, (dio.N,))
+        self.assertFalse(hasattr(dio, "read_price_typical"))
+
+    def test_first_day_forecast_uses_no_attachment1_prior(self):
+        load = np.full((2, dio.N), 10.0)
+        pv = np.full((2, dio.N), 3.0)
+        _f, _r, load_hat, pv_hat, _lr, _pr = fc.build_causal_forecasts(load, pv)
+        np.testing.assert_array_equal(load_hat[0], np.zeros(dio.N))
+        np.testing.assert_array_equal(pv_hat[0], np.zeros(dio.N))
 
     def test_reference_policy_may_preserve_battery_and_buy_current_emergency(self):
         net = np.zeros(dio.N)

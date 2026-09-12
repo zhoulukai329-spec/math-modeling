@@ -199,6 +199,9 @@ def write_result_xlsx(sheets):
 
 def main():
     z = np.load(str(dio.SOLUTION_NPZ))
+    if ("forecast_initialization" not in z.files
+            or str(z["forecast_initialization"][0]) != "zero_no_attachment1"):
+        raise ValueError("当前NPZ由旧版附件1负载/光伏先验生成，请先重新运行Q2主程序")
     dates, price = z["dates"], z["price"]
     g, c, d, e, E = z["g"], z["c"], z["d"], z["e"], z["E"]
     planned_cost = z["planned_cost"]
