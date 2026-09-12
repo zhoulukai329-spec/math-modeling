@@ -105,3 +105,12 @@ def read_dynamic_prices(first_price=None):
         # series is introduced into Q4-2.
         first_price = raw[0, 0]
     return dates, align_price_cross_day(raw, first_price)
+
+
+def read_next_midnight_price():
+    """Return the published 2026-01-01 00:00 quote kept in Attachment 4's last cell."""
+    rows = xr.read_sheet_rows(str(ATTACH4))["Sheet1"]
+    value = float(rows[-1][N])
+    if not np.isfinite(value) or value < 0:
+        raise ValueError("附件4跨年0:00电价无效")
+    return value

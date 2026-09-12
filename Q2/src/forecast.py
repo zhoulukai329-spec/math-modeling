@@ -13,6 +13,14 @@
 import numpy as np
 
 
+def next_day_point_forecast(actual_history):
+    """Forecast the day after the sample from the actual value seven days earlier."""
+    actual_history = np.asarray(actual_history, dtype=float)
+    if actual_history.ndim != 2 or len(actual_history) < 7:
+        raise ValueError("跨年边界预测至少需要7个历史日")
+    return actual_history[-7].copy()
+
+
 def build_causal_forecasts(load, pv, first_day_load=None, first_day_pv=None):
     """分别生成 0..D-1 每日的因果负载/光伏点预测与残差，再合成净负荷。
 

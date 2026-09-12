@@ -41,6 +41,11 @@ python Q2/src/forecast_initialization_sensitivity.py --mode full
 `emergency_table.py` 生成四个指定日期并排的紧急购电表，依赖 `numpy`、
 `matplotlib` 和 `openpyxl`。连续紧急购电时段合并，购电量采用 kWh。
 
+计划购电工作表按官方模板的跨日口径填写：每行覆盖当天00:10至次日00:10，
+最后一列取下一自然日00:00的计划值，行合计与费用也按这144格重新计算。
+12月31日的最后一格由模型在2026年1月1日00:00仅用届时可用历史信息额外规划，
+不计入2025年正式评价期。旧版NPZ不含该边界字段，修改后须重新运行主程序。
+
 > 注：`src/stress_test.py` 已废弃（旧 API），功能由 `robustness.py` 与
 > `imputation_sensitivity.py` 覆盖，请用 `git rm Q2/src/stress_test.py` 删除。
 

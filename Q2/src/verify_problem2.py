@@ -57,16 +57,18 @@ def check_primal(z):
 
 def check_continuity_and_cost(z):
     E = z["E"]
-    price = z["price"]
     g, e = z["g"], z["e"]
+    price = np.asarray(z["price"], dtype=float)
+    if price.ndim == 1:
+        price = np.repeat(price[None, :], len(g), axis=0)
     planned = z["planned_cost"]
     emergency = z["emergency_cost"]
     total = z["total_cost"]
 
     # 结果数组本身已按 2/1~12/31 连续；需重算跨日连续。
     cross = np.max(np.abs(E[:-1, -1] - E[1:, 0]))
-    rec_planned = np.sum(price[None, :] * g, axis=1)
-    rec_emergency = np.sum(dio.EMERGENCY_MULT * price[None, :] * e, axis=1)
+    rec_planned = np.sum(price * g, axis=1)
+    rec_emergency = np.sum(dio.EMERGENCY_MULT * price * e, axis=1)
     rec_total = rec_planned + rec_emergency
     print("\n[2] 跨日连续性与费用重算")
     print(f"  跨日 SOC 最大断点: {cross:.3e}")
@@ -139,7 +141,11 @@ def check_xlsx(z):
     names = list(sheets)
     g, c, d, E, e = z["g"], z["c"], z["d"], z["E"], z["e"]
     dates = z["dates"]
-    planned = z["planned_cost"]
+    price = np.asarray(z["price"], dtype=float)
+    if price.ndim == 1:
+        price = np.repeat(price[None, :], len(g), axis=0)
+    boundary_g0 = float(z["boundary_g0"][0])
+    boundary_price0 = float(z["boundary_price0"][0])
     ok = True
     print("\n[4] result2.xlsx 复核")
     print(f"  工作表名: {names}")
@@ -149,17 +155,20 @@ def check_xlsx(z):
     ok &= len(plan) == 1 + len(dates)
     print(f"  计划购电量行数: {len(plan)} (期望 {1 + len(dates)})")
 
-    # 检查计划购电量数值：模板顺序为 g[:,1:] 后跟 g[:,0]
+    # 模板每行跨日：当天 g[i,1:] 后跟下一天 0:00 的购电量。
     if len(plan) == 1 + len(dates):
         max_diff = 0.0
         for i in range(len(dates)):
             row = plan[i + 1]
-            ordered = np.concatenate([g[i, 1:], g[i, :1]])
+            next_g0 = g[i + 1, 0] if i + 1 < len(g) else boundary_g0
+            next_price0 = price[i + 1, 0] if i + 1 < len(g) else boundary_price0
+            ordered = np.concatenate([g[i, 1:], [next_g0]])
+            ordered_price = np.concatenate([price[i, 1:], [next_price0]])
             vals = np.array(row[1 : 1 + dio.N], dtype=float)
             max_diff = max(max_diff, float(np.max(np.abs(vals - ordered))))
             ok &= abs(row[0] - dates[i]) <= 1e-8
-            ok &= abs(row[1 + dio.N] - g[i].sum()) <= 1e-4
-            ok &= abs(row[2 + dio.N] - planned[i]) <= 1e-4
+            ok &= abs(row[1 + dio.N] - ordered.sum()) <= 1e-4
+            ok &= abs(row[2 + dio.N] - ordered_price @ ordered) <= 1e-4
         print(f"  计划购电量最大数值误差: {max_diff:.3e}")
 
     charge = sheets["充放电量"]

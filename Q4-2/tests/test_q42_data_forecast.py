@@ -22,6 +22,16 @@ class DynamicPriceDataTests(unittest.TestCase):
         self.assertEqual(aligned[1, 0], raw[0, -1])
         np.testing.assert_array_equal(aligned[1, 1:], raw[1, :-1])
 
+    def test_next_day_forecasts_use_last_week_and_published_midnight_quote(self):
+        net_forecast = np.arange(10 * dio.N, dtype=float).reshape(10, dio.N)
+        price_actual = 1000.0 + net_forecast
+        net_next, price_next = fc.next_day_point_forecasts(
+            net_forecast, price_actual, next_midnight_price=7.25
+        )
+        np.testing.assert_array_equal(net_next, net_forecast[-7])
+        np.testing.assert_array_equal(price_next[1:], price_actual[-7, 1:])
+        self.assertEqual(price_next[0], 7.25)
+
     def test_price_forecast_is_causal_and_uses_weekly_seasonality(self):
         price = np.arange(10 * dio.N, dtype=float).reshape(10, dio.N)
         forecast, residual = fc.build_causal_price_forecasts(price)

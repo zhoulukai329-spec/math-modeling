@@ -66,16 +66,23 @@ def check_workbook(z, workbook):
     sheets = xr.read_sheet_rows(str(workbook))
     if list(sheets) != ["计划购电量", "充放电量", "紧急购电量"]:
         raise AssertionError(f"工作表名称错误: {list(sheets)}")
-    dates, g = z["dates"], z["g"]
+    dates, g, price = z["dates"], z["g"], z["price"]
+    boundary_g0 = float(z["boundary_g0"][0])
+    boundary_price0 = float(z["boundary_price0"][0])
     plan = sheets["计划购电量"]
     if len(plan) != len(dates)+1:
         raise AssertionError("计划购电量工作表行数错误")
     for i in range(len(dates)):
-        ordered = np.concatenate([g[i,1:], g[i,:1]])
+        next_g0 = g[i + 1, 0] if i + 1 < len(g) else boundary_g0
+        next_price0 = price[i + 1, 0] if i + 1 < len(g) else boundary_price0
+        ordered = np.concatenate([g[i, 1:], [next_g0]])
+        ordered_price = np.concatenate([price[i, 1:], [next_price0]])
         actual = np.asarray(plan[i+1][1:145], dtype=float)
         if np.max(np.abs(actual-ordered)) > 1e-4:
             raise AssertionError(f"计划购电量第{i+2}行与NPZ不一致")
-        if abs(float(plan[i+1][146])-float(z["planned_cost"][i])) > 1e-4:
+        if abs(float(plan[i+1][145])-float(ordered.sum())) > 1e-4:
+            raise AssertionError(f"计划购电量第{i+2}行合计不一致")
+        if abs(float(plan[i+1][146])-float(ordered_price @ ordered)) > 1e-4:
             raise AssertionError(f"计划购电费用第{i+2}行不一致")
     print("  result4-2.xlsx计划表与NPZ: PASS")
 

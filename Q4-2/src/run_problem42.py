@@ -92,8 +92,25 @@ def _inputs():
     return dates, net, price_actual, net_f, price_f, net_r, price_r
 
 
+def plan_boundary_midnight(net, net_f, price_actual, net_r, price_r, E_start,
+                           n_scenarios=N_SCENARIOS, lookback=LOOKBACK, seed=2025):
+    """Plan the first 2026 slot without requiring future realised load or prices."""
+    boundary_price0 = dio.read_next_midnight_price()
+    net_next, price_next = fc.next_day_point_forecasts(net, price_actual, boundary_price0)
+    price_f, _ = fc.build_causal_price_forecasts(price_actual)
+    zero = np.zeros((1, dio.N))
+    net_s, price_s, _ = fc.joint_scenarios_for_day(
+        len(net_f), np.vstack([net_f, net_next]), np.vstack([price_f, price_next]),
+        np.vstack([net_r, zero]), np.vstack([price_r, zero]),
+        n_scenarios=n_scenarios, lookback=lookback, seed=seed,
+    )
+    v_terminal = dio.terminal_value(price_s.mean(axis=0))
+    g, _ = opt.build_first_stage(price_s, net_s, E_start, v_terminal)
+    return float(g[0]), float(boundary_price0)
+
+
 def _save(path, dates, price_actual, price_forecast, net, net_forecast,
-          sim, mask, args):
+          sim, mask, args, boundary_g0=np.nan, boundary_price0=np.nan):
     np.savez_compressed(
         path, dates=dates[mask], price=price_actual[mask],
         price_forecast=price_forecast[mask], net=net[mask],
@@ -109,6 +126,8 @@ def _save(path, dates, price_actual, price_forecast, net, net_forecast,
         n_scenarios=np.array([args.scenarios]), lookback=np.array([args.lookback]),
         seed=np.array([args.seed]), eta=np.array([dio.ETA_C, dio.ETA_D]),
         complete=np.array([args.mode == "full"]),
+        boundary_g0=np.array([boundary_g0]),
+        boundary_price0=np.array([boundary_price0]),
     )
 
 
@@ -133,10 +152,18 @@ def main(argv=None):
         n_scenarios=args.scenarios, lookback=args.lookback, seed=args.seed,
         E_start=E0, start_day=start, end_day=end,
     )
+    if args.mode == "full":
+        boundary_g0, boundary_price0 = plan_boundary_midnight(
+            net, net_f, price_actual, net_r, price_r, sim["E"][-1, -1],
+            n_scenarios=args.scenarios, lookback=args.lookback, seed=args.seed,
+        )
+    else:
+        boundary_g0 = boundary_price0 = np.nan
     mask = np.zeros(len(dates), dtype=bool)
     if args.mode == "full": mask[OUTPUT_START_DAY:] = True
     else: mask[start:end+1] = True
-    _save(out, dates, price_actual, price_f, net, net_f, sim, mask, args)
+    _save(out, dates, price_actual, price_f, net, net_f, sim, mask, args,
+          boundary_g0, boundary_price0)
     print(f"Q4-2 {args.mode}完成: {out}，用时{time.time()-t0:.1f}s")
     print(f"所选期间总费用: {sim['total_cost'][mask].sum():.2f} 元")
 

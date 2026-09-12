@@ -124,6 +124,20 @@ def simulate_days(net, price, f, load_resid, pv_resid,
     }
 
 
+def plan_boundary_midnight(price, net, f, load_resid, pv_resid, E_start,
+                           n_scenarios=N_SCENARIOS, lookback=LOOKBACK, seed=2025):
+    """Plan 2026-01-01 and return only its first slot for the template boundary."""
+    next_f = fc.next_day_point_forecast(net)
+    f_ext = np.vstack([f, next_f])
+    zero = np.zeros((1, dio.N))
+    scenarios = fc.scenarios_for_day(
+        len(f), f_ext, np.vstack([load_resid, zero]), np.vstack([pv_resid, zero]),
+        n_scenarios=n_scenarios, lookback=lookback, seed=seed,
+    )
+    g, _ = opt.build_first_stage(price, scenarios, E_start, dio.terminal_value(price))
+    return float(g[0])
+
+
 def main():
     t0 = time.time()
 
@@ -144,6 +158,10 @@ def main():
         net, price, f, load_resid, pv_resid,
         n_scenarios=N_SCENARIOS, lookback=LOOKBACK,
         seed=2025, E_start=dio.E0_START, v_terminal=v_terminal,
+    )
+    boundary_g0 = plan_boundary_midnight(
+        price, net, f, load_resid, pv_resid, sim["E"][-1, -1],
+        n_scenarios=N_SCENARIOS, lookback=LOOKBACK, seed=2025,
     )
     print(f"\n全年回测完成，用时 {time.time() - t0:.1f} s")
 
@@ -181,6 +199,8 @@ def main():
         n_scenarios=np.array([N_SCENARIOS]),
         forecast_initialization=np.array(["zero_no_attachment1"]),
         eta=np.array([dio.ETA_C, dio.ETA_D]),
+        boundary_g0=np.array([boundary_g0]),
+        boundary_price0=np.array([price[0]]),
     )
     print(f"结果已保存: {dio.SOLUTION_NPZ}")
 

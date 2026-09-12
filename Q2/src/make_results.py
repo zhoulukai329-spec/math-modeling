@@ -94,16 +94,29 @@ def _find_date_idx(dates, target_serial):
     return int(idx[0])
 
 
-def build_plan_rows(dates, g, planned_cost):
+def build_plan_rows(dates, g, price, boundary_g0, boundary_price0):
+    """Build template rows spanning 00:10 on day d to 00:10 on day d+1.
+
+    ``g`` is stored in calendar order (00:00..24:00).  The template is not:
+    its final slot belongs to the following date, so a simple cyclic roll is
+    incorrect for a multi-day result.
+    """
     header = dio.plan_header()
     rows = [header]
-    N = dio.N
+    g = np.asarray(g, dtype=float)
+    price = np.asarray(price, dtype=float)
+    if price.ndim == 1:
+        price = np.repeat(price[None, :], len(g), axis=0)
+    if g.shape != (len(dates), dio.N) or price.shape != g.shape:
+        raise ValueError("购电量、电价与日期形状不一致")
+    next_g0 = np.concatenate([g[1:, 0], [float(boundary_g0)]])
+    next_price0 = np.concatenate([price[1:, 0], [float(boundary_price0)]])
     for i, serial in enumerate(dates):
-        # 模板顺序：x[1]..x[143], x[0]
-        ordered = np.concatenate([g[i, 1:], g[i, :1]])
+        ordered = np.concatenate([g[i, 1:], next_g0[i:i + 1]])
+        ordered_price = np.concatenate([price[i, 1:], next_price0[i:i + 1]])
         row = [float(serial)] + list(ordered) + [
-            float(g[i].sum()),
-            float(planned_cost[i]),
+            float(ordered.sum()),
+            float(ordered_price @ ordered),
         ]
         rows.append(row)
     return rows
@@ -274,7 +287,12 @@ def main():
     print(f"  紧急购电总费用: {emergency_cost.sum():.2f} 元")
     print(f"  总购电费用:     {total_cost.sum():.2f} 元")
 
-    plan_rows = build_plan_rows(dates, g, planned_cost)
+    for key in ("boundary_g0", "boundary_price0"):
+        if key not in z.files:
+            raise ValueError(f"当前NPZ缺少跨年边界字段{key}，请重新运行Q2主程序")
+    plan_rows = build_plan_rows(
+        dates, g, price, float(z["boundary_g0"][0]), float(z["boundary_price0"][0])
+    )
     charge_rows = build_charge_rows(dates, c, d, E)
     emergency_rows = build_emergency_rows(dates, e)
     write_result_xlsx([plan_rows, charge_rows, emergency_rows])

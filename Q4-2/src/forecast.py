@@ -23,6 +23,18 @@ _q2_forecast = _load_q2_forecast()
 build_causal_forecasts = _q2_forecast.build_causal_forecasts
 
 
+def next_day_point_forecasts(net_actual, price_actual, next_midnight_price):
+    """Build the post-period day forecast from information known at midnight."""
+    net_actual = np.asarray(net_actual, dtype=float)
+    price_actual = np.asarray(price_actual, dtype=float)
+    if net_actual.ndim != 2 or price_actual.shape != net_actual.shape or len(net_actual) < 7:
+        raise ValueError("跨年边界预测需要形状一致且至少7天的历史")
+    net_next = net_actual[-7].copy()
+    price_next = price_actual[-7].copy()
+    price_next[0] = float(next_midnight_price)
+    return net_next, price_next
+
+
 def build_causal_price_forecasts(price_actual):
     """Forecast each day using only prices observed before that day's 00:00."""
     price_actual = np.asarray(price_actual, dtype=float)

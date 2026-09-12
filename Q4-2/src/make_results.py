@@ -58,8 +58,14 @@ def main():
         dates = z["dates"]
         if len(dates) != 334:
             raise ValueError(f"正式输出期应为334天，实际{len(dates)}天")
+        for key in ("boundary_g0", "boundary_price0"):
+            if key not in z.files or not np.isfinite(float(z[key][0])):
+                raise ValueError(f"正式结果缺少有效跨年边界字段{key}，请重新运行full")
         sheets = [
-            build_plan_rows(dates, z["g"], z["planned_cost"]),
+            build_plan_rows(
+                dates, z["g"], z["price"],
+                float(z["boundary_g0"][0]), float(z["boundary_price0"][0]),
+            ),
             build_charge_rows(dates, z["c"], z["d"], z["E"]),
             build_emergency_rows(dates, z["e"]),
         ]
