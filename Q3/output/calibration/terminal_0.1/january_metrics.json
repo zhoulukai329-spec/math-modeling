@@ -43,7 +43,7 @@
     "emergency": 1308300.359867529
   },
   "total_cost": 2865827.092183817,
-  "elapsed_seconds": 196.6840812000155,
+  "elapsed_seconds": 151.35938059998443,
   "solve_count": 4588,
   "optimal_solve_count": 4588,
   "config": {

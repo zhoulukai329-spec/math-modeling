@@ -53,7 +53,7 @@
         "causality_scope": "Publication clocks, observation flags, one common action per execution, unknown future actuals. Saved summaries cannot prove all forecast/scenario inputs; future-actual perturbation is tested separately."
       },
       "solution": "D:\\-\\Q3\\output\\calibration\\terminal_0\\january_solution.npz",
-      "sha256": "207ccd3bf2cc440925a6482e7df0ea13c6d5215e5608f8bf9d6420e404e32bcf"
+      "sha256": "dcbd2b404362b220a666d0a1273bece30b8105a2af7954030864f9b7ccaed6c1"
     },
     {
       "parameters": {
@@ -99,7 +99,7 @@
         "causality_scope": "Publication clocks, observation flags, one common action per execution, unknown future actuals. Saved summaries cannot prove all forecast/scenario inputs; future-actual perturbation is tested separately."
       },
       "solution": "D:\\-\\Q3\\output\\calibration\\terminal_0.1\\january_solution.npz",
-      "sha256": "b8528c2aa6f34f488390f35a6f1fa1f59f8f1c9163d06140e8c62626d7e0c191"
+      "sha256": "11b2dc5451c0911159a187cef30571fa11864546ca3c939ba3ad81ab18589fef"
     },
     {
       "parameters": {
@@ -145,7 +145,7 @@
         "causality_scope": "Publication clocks, observation flags, one common action per execution, unknown future actuals. Saved summaries cannot prove all forecast/scenario inputs; future-actual perturbation is tested separately."
       },
       "solution": "D:\\-\\Q3\\output\\calibration\\terminal_0.5\\january_solution.npz",
-      "sha256": "a9edc5c31865f195aea46fb20fe0e4897d4ee1cbf30a027e3cd63c1843327971"
+      "sha256": "289931ab82b0e7320d327fe6a69f4caed12ea07e6edbc0ba4a896d1d6bc872a6"
     }
   ],
   "horizon_steps": 144,
