@@ -11,6 +11,7 @@ from bisect import bisect_right
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
+import sys
 from time import perf_counter
 from typing import Any, Sequence
 
@@ -19,6 +20,11 @@ import numpy as np
 from data_io import InputData, coerce_date, load_inputs, source_datetimes
 from forecast import build_information_forecast, build_pv_scenarios
 from model import MPCProblem, MPCSolution, solve_mpc
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+from dispatch_core import BatteryLimits, dispatch_step
 
 
 @dataclass(frozen=True)
@@ -129,6 +135,7 @@ class SimulationConfig:
     cvar_alpha: float = .9
     time_limit: float = 30.0
     mip_rel_gap: float = 1e-4
+    backend: str = "rolling-milp"
 
     def __post_init__(self):
         for name in ("horizon_steps", "max_steps", "n_scenarios", "lookback_days"):
@@ -139,6 +146,8 @@ class SimulationConfig:
                 raise ValueError(f"{name} must be a positive integer")
         if self.horizon_steps > 144:
             raise ValueError("horizon_steps cannot exceed the published 24-hour horizon")
+        if self.backend not in {"rolling-milp", "event-policy"}:
+            raise ValueError("backend must be 'rolling-milp' or 'event-policy'")
         if (len(set(self.revision_hours)) != len(self.revision_hours)
                 or any(isinstance(h, bool) or not isinstance(h, int) or not 1 <= h <= 23
                        for h in self.revision_hours)):
@@ -172,6 +181,7 @@ class SimulationResult:
     emergency: np.ndarray
     spill: np.ndarray
     mode: np.ndarray
+    discharge_reference: np.ndarray
     soc_before: np.ndarray
     soc_after: np.ndarray
     versions: tuple[CommitmentVersion, ...]
@@ -266,6 +276,7 @@ def simulate(config: SimulationConfig, date_start: date | str,
     shape = (len(dates), 144)
     observed = {name: np.full(shape, np.nan) for name in
                 ("load_energy", "pv_energy", "charge", "discharge", "emergency", "spill", "mode",
+                 "discharge_reference",
                  "soc_before", "soc_after")}
     executed = np.zeros(shape, dtype=bool)
     ledgers: dict[date, CommitmentLedger] = {}
@@ -274,7 +285,11 @@ def simulate(config: SimulationConfig, date_start: date | str,
     residuals = _ResidualHistory(data)
     releases, release_keys = _release_catalog(data)
     forecast_cache: dict[tuple[datetime, int], Any] = {}
+    reference_by_time: dict[datetime, float] = {}
     soc = config.initial_soc
+    limits = BatteryLimits(config.soc_min, config.soc_max, config.charge_limit,
+                           config.discharge_limit, config.charge_efficiency,
+                           config.discharge_efficiency, tolerance=1e-5)
 
     def solve_at(now: datetime, first: int, length: int, kind: str,
                  mutable_day: date | None = None) -> MPCSolution:
@@ -330,6 +345,7 @@ def simulate(config: SimulationConfig, date_start: date | str,
                              baseline_mask=baseline_mask, **config.model_parameters())
         solution = solve_mpc(problem)
         entry = dict(solution.diagnostics, timestamp=now.isoformat(), kind=kind,
+                     backend=config.backend,
                      scenario_count=k, horizon_steps=length, status=solution.status,
                      optimal=solution.optimal, has_solution=solution.has_solution,
                      forecast_issue=release.isoformat(), observed_current=current_observed,
@@ -337,6 +353,10 @@ def simulate(config: SimulationConfig, date_start: date | str,
         solve_log.append(entry)
         if not solution.has_solution:
             raise SimulationSolveError(f"{kind} solve at {now.isoformat()}: {solution.status}; {solution.diagnostics}")
+        if config.backend == "event-policy" and kind in {"baseline", "revision"}:
+            reference = problem.scenario_probabilities @ solution.discharge
+            for target, value in zip(targets, reference):
+                reference_by_time[target] = float(max(0.0, value))
         if kind == "execution":
             disagreement = max(float(np.ptp(getattr(solution, name)[:, 0]))
                                for name in ("charge", "discharge", "emergency", "spill", "mode"))
@@ -376,17 +396,34 @@ def simulate(config: SimulationConfig, date_start: date | str,
                 revised = ledgers[operating_day].commitment.copy()
                 revised[column:] = solution.commitment[:144 - column]
                 versions.append(ledgers[operating_day].revise(now, revised))
-            solution = solve_at(now, first, config.horizon_steps, "execution")
             ix = result_row, column
-            for name in ("charge", "discharge", "emergency", "spill", "mode"):
-                observed[name][ix] = getattr(solution, name)[0, 0]
-            observed["soc_before"][ix] = soc
-            soc = _clip_soc_roundoff(
-                soc + config.charge_efficiency * observed["charge"][ix]
-                - observed["discharge"][ix] / config.discharge_efficiency,
-                config.soc_min, config.soc_max)
-            if abs(soc - solution.soc[0, 1]) > 1e-5:
-                raise SimulationSolveError(f"executed SOC disagrees with MILP at {now}")
+            if config.backend == "rolling-milp":
+                solution = solve_at(now, first, config.horizon_steps, "execution")
+                for name in ("charge", "discharge", "emergency", "spill", "mode"):
+                    observed[name][ix] = getattr(solution, name)[0, 0]
+                observed["discharge_reference"][ix] = observed["discharge"][ix]
+                observed["soc_before"][ix] = soc
+                soc = _clip_soc_roundoff(
+                    soc + config.charge_efficiency * observed["charge"][ix]
+                    - observed["discharge"][ix] / config.discharge_efficiency,
+                    config.soc_min, config.soc_max)
+                if abs(soc - solution.soc[0, 1]) > 1e-5:
+                    raise SimulationSolveError(f"executed SOC disagrees with MILP at {now}")
+            else:
+                reference = reference_by_time.get(now, 0.0)
+                action = dispatch_step(
+                    load_energy=data.load_energy[source_row, column],
+                    pv_energy=data.pv_energy[source_row, column],
+                    commitment=ledgers[operating_day].commitment[column],
+                    soc=soc,
+                    discharge_reference=reference,
+                    limits=limits,
+                )
+                for name in ("charge", "discharge", "emergency", "spill", "mode"):
+                    observed[name][ix] = getattr(action, name)
+                observed["discharge_reference"][ix] = reference
+                observed["soc_before"][ix] = action.soc_before
+                soc = action.soc_after
             observed["soc_after"][ix] = soc
             observed["load_energy"][ix] = data.load_energy[source_row, column]
             observed["pv_energy"][ix] = data.pv_energy[source_row, column]

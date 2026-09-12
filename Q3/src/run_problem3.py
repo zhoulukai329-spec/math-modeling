@@ -32,6 +32,8 @@ def build_parser():
     parser.add_argument("--cvar-alpha", type=float)
     parser.add_argument("--initial-soc", type=float, default=6000)
     parser.add_argument("--revision-hours", type=int, nargs="+", default=[6, 12, 18])
+    parser.add_argument("--backend", choices=("event-policy", "rolling-milp"), default="event-policy",
+                        help="event-policy用于快速全年计算；rolling-milp仅建议作代表日精度对照")
     parser.add_argument("--attachment-dir", type=Path, default=ATTACHMENT_DIR)
     parser.add_argument("--output-dir", type=Path, default=Path(__file__).resolve().parents[1] / "output")
     parser.add_argument("--calibration", type=Path, help="Frozen January-only calibration JSON required for full mode")
@@ -76,7 +78,7 @@ def main(argv=None):
         n_scenarios=args.n_scenarios if args.n_scenarios is not None else (2 if args.mode == "smoke" else 12),
         seed=args.seed, lookback_days=args.lookback_days, time_limit=args.time_limit,
         mip_rel_gap=args.mip_rel_gap, deterministic=args.deterministic, initial_soc=args.initial_soc,
-        revision_hours=tuple(args.revision_hours), **tuning)
+        revision_hours=tuple(args.revision_hours), backend=args.backend, **tuning)
     end = args.date_end or (args.date_start if args.mode == "smoke" else "2025-12-31")
     sim_start = "2025-01-01" if args.mode == "full" else args.date_start
     result = simulate(config, sim_start, end)

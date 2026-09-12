@@ -27,7 +27,8 @@ def verify_solution(result, *, workbook_path=None, template_path=None, tolerance
 
     shape = (len(result.dates), 144)
     for name in ("timestamps", "executed", "baseline", "final_commitment", "load_energy", "pv_energy",
-                 "price", "charge", "discharge", "emergency", "spill", "mode", "soc_before", "soc_after"):
+                 "price", "charge", "discharge", "emergency", "spill", "mode", "discharge_reference",
+                 "soc_before", "soc_after"):
         require(np.shape(getattr(result, name)) == shape, f"{name} shape")
     if errors:
         return dict(passed=False, errors=errors, residuals=residuals)
@@ -41,7 +42,8 @@ def verify_solution(result, *, workbook_path=None, template_path=None, tolerance
     require(np.array_equal(result.timestamps, expected_times), "timestamp source order or midnight boundary")
     require(all(b - a == timedelta(days=1) for a, b in zip(result.dates, result.dates[1:])), "timestamp date chronology")
     require(np.array_equal(mask.ravel(), np.arange(mask.size) < mask.sum()), "execution must be a chronological prefix")
-    for name in ("load_energy", "pv_energy", "charge", "discharge", "emergency", "spill", "mode", "soc_before", "soc_after"):
+    for name in ("load_energy", "pv_energy", "charge", "discharge", "emergency", "spill", "mode",
+                 "discharge_reference", "soc_before", "soc_after"):
         values = getattr(result, name)
         require(np.isfinite(values[mask]).all(), f"executed {name} nonfinite")
         require(np.isnan(values[~mask]).all(), f"unexecuted {name} must be unknown")
@@ -65,6 +67,7 @@ def verify_solution(result, *, workbook_path=None, template_path=None, tolerance
     require(np.all(d <= cfg.discharge_limit * (1 - mode) + tolerance), "discharge mode")
     require(not np.any((c > tolerance) & (e > tolerance)), "emergency/charge mode exclusion")
     require(not np.any((mode > .5) & (e > tolerance)), "emergency binary mode")
+    require(np.all(result.discharge_reference[mask] >= -tolerance), "negative discharge reference")
 
     date_rows = {day: i for i, day in enumerate(result.dates)}
     ledger = {}
@@ -134,6 +137,7 @@ def verify_solution(result, *, workbook_path=None, template_path=None, tolerance
             require(entry["has_solution"] is True and entry["n_binary"] > 0, "MILP incumbent/size audit")
             expected_k = 1 if cfg.deterministic or (cfg.january_warmup and now.month == 1) else cfg.n_scenarios
             require(entry["scenario_count"] == expected_k, "scenario count")
+            require(entry.get("backend", "rolling-milp") == cfg.backend, "solve backend audit")
             require(entry["kind"] in ("baseline", "revision", "execution"), "unknown solve kind")
             if entry["kind"] == "execution":
                 execution_times.append(now)
@@ -148,7 +152,10 @@ def verify_solution(result, *, workbook_path=None, template_path=None, tolerance
                     require(entry["observed_current"] is False, "future first baseline observation")
         except (KeyError, ValueError, TypeError) as exc:
             require(False, f"solve audit fields: {exc}")
-    require(execution_times == list(expected_times[mask]), "execution log must cover every executed timestamp")
+    if cfg.backend == "rolling-milp":
+        require(execution_times == list(expected_times[mask]), "execution log must cover every executed timestamp")
+    else:
+        require(not execution_times, "event-policy must not create fake execution MILP logs")
     require(issue_logs == issuance, "version issuance log mismatch")
     if mask.any():
         mandatory = [(datetime.combine(result.dates[0], time()).isoformat(), "baseline")]

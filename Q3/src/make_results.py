@@ -14,7 +14,8 @@ from data_io import ATTACHMENT_DIR, coerce_date
 from simulation import CommitmentVersion, SimulationConfig, SimulationResult
 
 ARRAY_FIELDS = ("executed", "baseline", "final_commitment", "load_energy", "pv_energy",
-                "price", "charge", "discharge", "emergency", "spill", "mode", "soc_before", "soc_after")
+                "price", "charge", "discharge", "emergency", "spill", "mode",
+                "discharge_reference", "soc_before", "soc_after")
 DEFAULT_TEMPLATE = ATTACHMENT_DIR / "附件5" / "result3.xlsx"
 
 
@@ -164,8 +165,11 @@ def load_result(path: str | Path) -> SimulationResult:
                 for name in ("commitment", "revision_up", "revision_down")}))
         config = metadata["config"]
         config["revision_hours"] = tuple(config["revision_hours"])
+        restored = {name: saved[name].copy() for name in ARRAY_FIELDS if name in saved.files}
+        if "discharge_reference" not in restored:
+            restored["discharge_reference"] = restored["discharge"].copy()
         return SimulationResult(dates=tuple(date.fromisoformat(d) for d in metadata["dates"]),
             timestamps=np.asarray([[datetime.fromisoformat(t) for t in row] for row in saved["timestamps"]], dtype=object),
             versions=tuple(versions), config=SimulationConfig(**config), costs=metadata["costs"],
             solve_log=metadata["solve_log"], elapsed_seconds=metadata["elapsed_seconds"],
-            **{name: saved[name].copy() for name in ARRAY_FIELDS})
+            **restored)

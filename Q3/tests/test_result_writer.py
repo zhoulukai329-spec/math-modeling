@@ -141,6 +141,7 @@ def test_cli_exposes_modes_and_requires_frozen_full_calibration():
     help_run = subprocess.run([sys.executable, str(SRC / "run_problem3.py"), "--help"], capture_output=True, text=True)
     assert help_run.returncode == 0, help_run.stderr
     assert "experiments" in help_run.stdout and "--max-steps" in help_run.stdout
+    assert "--backend" in help_run.stdout and "event-policy" in help_run.stdout
     full = subprocess.run([sys.executable, str(SRC / "run_problem3.py"), "--mode", "full"], capture_output=True, text=True)
     assert full.returncode != 0
     assert "calibration" in full.stderr.lower()
