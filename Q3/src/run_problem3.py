@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 
 from data_io import ATTACHMENT_DIR
-from make_results import save_result
+from make_results import save_result, trim_result
 from simulation import SimulationConfig, simulate
 from verify_problem3 import verify_solution
 
@@ -16,7 +16,7 @@ from verify_problem3 import verify_solution
 def build_parser():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--mode", choices=("smoke", "full", "experiments"), default="smoke")
-    parser.add_argument("--date-start", default="2025-01-01")
+    parser.add_argument("--date-start", default="2025-02-01")
     parser.add_argument("--date-end")
     parser.add_argument("--horizon-steps", type=int)
     parser.add_argument("--max-steps", type=int)
@@ -32,6 +32,11 @@ def build_parser():
     parser.add_argument("--cvar-alpha", type=float)
     parser.add_argument("--initial-soc", type=float, default=6000)
     parser.add_argument("--revision-hours", type=int, nargs="+", default=[6, 12, 18])
+    parser.add_argument("--experiment-dates", nargs="+",
+                        default=["2025-02-01", "2025-05-01", "2025-08-01", "2025-11-01"],
+                        help="代表日修订时刻消融；仅在 experiments 模式使用")
+    parser.add_argument("--backend", choices=("event-policy", "rolling-milp"), default="event-policy",
+                        help="event-policy用于快速全年计算；rolling-milp仅建议作代表日精度对照")
     parser.add_argument("--attachment-dir", type=Path, default=ATTACHMENT_DIR)
     parser.add_argument("--output-dir", type=Path, default=Path(__file__).resolve().parents[1] / "output")
     parser.add_argument("--calibration", type=Path, help="Frozen January-only calibration JSON required for full mode")
@@ -76,10 +81,12 @@ def main(argv=None):
         n_scenarios=args.n_scenarios if args.n_scenarios is not None else (2 if args.mode == "smoke" else 12),
         seed=args.seed, lookback_days=args.lookback_days, time_limit=args.time_limit,
         mip_rel_gap=args.mip_rel_gap, deterministic=args.deterministic, initial_soc=args.initial_soc,
-        revision_hours=tuple(args.revision_hours), **tuning)
+        revision_hours=tuple(args.revision_hours), backend=args.backend, **tuning)
     end = args.date_end or (args.date_start if args.mode == "smoke" else "2025-12-31")
     sim_start = "2025-01-01" if args.mode == "full" else args.date_start
     result = simulate(config, sim_start, end)
+    if args.mode == "full":
+        result = trim_result(result, args.date_start)
     report = verify_solution(result)
     if not report["passed"]:
         raise RuntimeError(f"simulation failed independent verification: {report['errors']}")

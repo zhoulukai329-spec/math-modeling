@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 import subprocess
 import sys
+from types import SimpleNamespace
 
 import numpy as np
 from openpyxl import load_workbook
@@ -17,6 +18,19 @@ ROOT = SRC.parents[1]
 sys.path.insert(0, str(SRC))
 from test_simulation import inputs, config
 import simulation
+
+
+def _load_q3_module(name):
+    if str(SRC) in sys.path:
+        sys.path.remove(str(SRC))
+    sys.path.insert(0, str(SRC))
+    for module_name in (
+        "data_io", "forecast", "model", "simulation", "make_results",
+        "verify_problem3", "calibration", "complete_problem3", "experiments",
+        "run_problem3",
+    ):
+        sys.modules.pop(module_name, None)
+    return importlib.import_module(name)
 
 
 def test_output_modules_exist():
@@ -33,12 +47,12 @@ def result():
 
 @pytest.fixture
 def writer():
-    return importlib.import_module("make_results")
+    return _load_q3_module("make_results")
 
 
 @pytest.fixture
 def verifier():
-    return importlib.import_module("verify_problem3")
+    return _load_q3_module("verify_problem3")
 
 
 def test_template_baseline_adjusted_and_unexecuted_are_distinct(writer, result, tmp_path):
@@ -87,6 +101,15 @@ def test_npz_roundtrip_and_csv_retain_versions_and_unknowns(writer, verifier, re
     assert metrics["total_cost"] == pytest.approx(result.total_cost)
     assert paths["trajectory"].read_text(encoding="utf-8-sig").count("\n") == 289
     assert verifier.verify_solution(restored, workbook_path=paths["workbook"])["passed"]
+
+
+def test_trim_result_removes_warmup_rows_and_recomputes_reported_costs(writer, verifier, result):
+    trimmed = writer.trim_result(result, result.dates[1])
+    assert trimmed.dates == (result.dates[1],)
+    assert trimmed.executed.shape == (1, 144)
+    assert all(version.target_times[0].date() == result.dates[1] for version in trimmed.versions)
+    report = verifier.verify_solution(trimmed)
+    assert report["passed"], report["errors"]
 
 
 def test_load_result_accepts_utf8_bom_wrapped_npz(writer, result, tmp_path):
@@ -141,9 +164,60 @@ def test_cli_exposes_modes_and_requires_frozen_full_calibration():
     help_run = subprocess.run([sys.executable, str(SRC / "run_problem3.py"), "--help"], capture_output=True, text=True)
     assert help_run.returncode == 0, help_run.stderr
     assert "experiments" in help_run.stdout and "--max-steps" in help_run.stdout
+    assert "--backend" in help_run.stdout and "event-policy" in help_run.stdout
     full = subprocess.run([sys.executable, str(SRC / "run_problem3.py"), "--mode", "full"], capture_output=True, text=True)
     assert full.returncode != 0
     assert "calibration" in full.stderr.lower()
+
+
+def test_legacy_complete_entry_uses_fast_backend():
+    complete = _load_q3_module("complete_problem3")
+
+    config = complete.build_complete_config(data=object(), attachment_dir=Path("attachment"))
+    assert config.backend == "event-policy"
+    assert config.horizon_steps == 144
+    assert config.n_scenarios == 12
+
+
+def test_cli_defaults_to_first_formal_evaluation_day():
+    run_problem3 = _load_q3_module("run_problem3")
+
+    args = run_problem3.build_parser().parse_args([])
+    assert args.date_start == "2025-02-01"
+
+
+def test_revision_experiment_uses_final_fast_model_parameters():
+    experiments = _load_q3_module("experiments")
+
+    args = SimpleNamespace(
+        attachment_dir=Path("attachment"), max_steps=None, n_scenarios=None,
+        seed=2025, lookback_days=28, time_limit=30, mip_rel_gap=1e-4,
+        deterministic=False, initial_soc=6000, terminal_penalty=None,
+        cvar_weight=None,
+    )
+    config = experiments.build_experiment_config(args, (6, 12, 18))
+    assert config.backend == "event-policy"
+    assert config.horizon_steps == 144
+    assert config.max_steps == 144
+    assert config.n_scenarios == 12
+    assert config.terminal_penalty == 0.5
+
+
+def test_revision_experiment_rejects_unverified_result(monkeypatch, tmp_path):
+    experiments = _load_q3_module("experiments")
+    args = SimpleNamespace(
+        output_dir=tmp_path, experiment_dates=["2025-02-01"],
+        attachment_dir=Path("attachment"), max_steps=1, n_scenarios=1,
+        seed=2025, lookback_days=28, time_limit=1, mip_rel_gap=1e-4,
+        deterministic=True, initial_soc=6000, terminal_penalty=0.5,
+        cvar_weight=0.0,
+    )
+    monkeypatch.setattr(experiments, "simulate", lambda *a, **k: object())
+    monkeypatch.setattr(experiments, "verify_solution", lambda result: {
+        "passed": False, "errors": ["deliberate failure"]
+    })
+    with pytest.raises(RuntimeError, match="deliberate failure"):
+        experiments.run_experiments(args)
 
 
 def test_smoke_rejects_calibration_before_running():

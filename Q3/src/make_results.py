@@ -2,7 +2,7 @@
 from __future__ import annotations
 import io
 import csv
-from dataclasses import fields
+from dataclasses import fields, replace
 from datetime import date, datetime, time, timedelta
 import json
 from pathlib import Path
@@ -14,8 +14,44 @@ from data_io import ATTACHMENT_DIR, coerce_date
 from simulation import CommitmentVersion, SimulationConfig, SimulationResult
 
 ARRAY_FIELDS = ("executed", "baseline", "final_commitment", "load_energy", "pv_energy",
-                "price", "charge", "discharge", "emergency", "spill", "mode", "soc_before", "soc_after")
+                "pv_forecast", "price", "charge", "discharge", "emergency", "spill", "mode",
+                "charge_reference", "discharge_reference", "soc_before", "soc_after")
 DEFAULT_TEMPLATE = ATTACHMENT_DIR / "附件5" / "result3.xlsx"
+
+
+def trim_result(result: SimulationResult, date_start) -> SimulationResult:
+    """Remove warm-up rows and recompute the exact reported cash scope."""
+    start = coerce_date(date_start)
+    keep = np.asarray([day >= start for day in result.dates], dtype=bool)
+    if not keep.any():
+        raise ValueError("trim start is after the result period")
+    dates = tuple(day for day, selected in zip(result.dates, keep) if selected)
+    arrays = {name: getattr(result, name)[keep].copy() for name in ARRAY_FIELDS}
+    timestamps = result.timestamps[keep].copy()
+    versions = tuple(v for v in result.versions if v.target_times[0].date() in set(dates))
+    mask = arrays["executed"]
+    costs = {
+        "baseline": float(sum(v.baseline_cost for v in versions)),
+        "revision_up": float(sum(v.up_cost for v in versions)),
+        "revision_down": float(sum(v.down_cost for v in versions)),
+        "emergency": float(np.sum(5 * arrays["price"][mask] * arrays["emergency"][mask])),
+    }
+    actual_times = set(timestamps[mask])
+    issue_keys = {(v.issued_at, v.kind) for v in versions}
+    solve_log = []
+    for entry in result.solve_log:
+        now = datetime.fromisoformat(entry["timestamp"])
+        if ((entry["kind"] == "execution" and now in actual_times)
+                or (entry["kind"] != "execution" and (now, entry["kind"]) in issue_keys)):
+            solve_log.append(dict(entry))
+    for entry in solve_log:
+        if (entry["kind"] == "baseline"
+                and datetime.fromisoformat(entry["timestamp"]) == datetime.combine(dates[0], time())):
+            entry["trimmed_warmup_boundary"] = True
+    initial_soc = float(arrays["soc_before"][mask][0])
+    return replace(result, dates=dates, timestamps=timestamps, versions=versions,
+                   costs=costs, solve_log=solve_log,
+                   config=replace(result.config, initial_soc=initial_soc), **arrays)
 
 
 def _json_value(value):
@@ -164,8 +200,15 @@ def load_result(path: str | Path) -> SimulationResult:
                 for name in ("commitment", "revision_up", "revision_down")}))
         config = metadata["config"]
         config["revision_hours"] = tuple(config["revision_hours"])
+        restored = {name: saved[name].copy() for name in ARRAY_FIELDS if name in saved.files}
+        if "discharge_reference" not in restored:
+            restored["discharge_reference"] = restored["discharge"].copy()
+        if "charge_reference" not in restored:
+            restored["charge_reference"] = restored["charge"].copy()
+        if "pv_forecast" not in restored:
+            restored["pv_forecast"] = restored["pv_energy"].copy()
         return SimulationResult(dates=tuple(date.fromisoformat(d) for d in metadata["dates"]),
             timestamps=np.asarray([[datetime.fromisoformat(t) for t in row] for row in saved["timestamps"]], dtype=object),
             versions=tuple(versions), config=SimulationConfig(**config), costs=metadata["costs"],
             solve_log=metadata["solve_log"], elapsed_seconds=metadata["elapsed_seconds"],
-            **{name: saved[name].copy() for name in ARRAY_FIELDS})
+            **restored)

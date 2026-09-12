@@ -55,6 +55,8 @@ def test_energy_not_converted_again_and_baseline_cost(model):
     baseline = model.solve_mpc(replace(p, fixed_commitment=None))
     assert baseline.commitment[0] == pytest.approx(6.0)
     assert baseline.expected_cost == pytest.approx(6.0)
+    assert baseline.diagnostics["model_build_seconds"] >= 0
+    assert baseline.diagnostics["solver_seconds"] >= 0
 
 
 def test_soc_efficiency_and_charge_discharge_exclusion(model):
@@ -274,3 +276,23 @@ def test_mixed_settlement_prices_virtual_future_purchase_at_baseline_rate(model)
     np.testing.assert_allclose(s.revision_down, 0.0)
     assert s.procurement_cost == pytest.approx(1.5 + 4.0)
     assert s.cvar == pytest.approx(5.5)
+
+
+def test_scenario_prices_weight_emergency_while_expected_price_values_procurement(model):
+    scenario_price = np.array([[1.0], [3.0]])
+    p = problem(model, [1.0], pv=[[0.0], [0.0]], price=[2.5],
+                scenario_price=scenario_price, scenario_probabilities=[0.25, 0.75],
+                fixed_commitment=[0.0], charge_limit=0.0, discharge_limit=0.0)
+    emergency = model.solve_mpc(p)
+    np.testing.assert_allclose(emergency.scenario_cost, [5.0, 15.0])
+    assert emergency.expected_cost == pytest.approx(12.5)
+
+    baseline = model.solve_mpc(replace(p, fixed_commitment=None))
+    assert baseline.commitment[0] == pytest.approx(1.0)
+    assert baseline.procurement_cost == pytest.approx(2.5)
+
+
+def test_scenario_price_shape_is_validated(model):
+    with pytest.raises(ValueError, match="scenario_price"):
+        problem(model, [1.0, 2.0], pv=[[0.0, 0.0], [0.0, 0.0]],
+                scenario_price=[[1.0, 2.0]])

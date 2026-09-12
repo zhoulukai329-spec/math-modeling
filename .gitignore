@@ -5,9 +5,16 @@ Q2/output/forecast_initialization_*/
 # Generated/runtime data. Existing tracked copies remain in remote history;
 # local changes are suppressed separately with skip-worktree.
 Q3/output/
-Q3/output/progress.json
-Q4-2/output/*
+Q3/figures/
 attachment/
-Q4-2/output/smoke_solution.npz
+
+Q4-3/output/
+Q4-3/figures/
+
+.smoke-*/
+.fig-*/
+.sensitivity-*/
+.test-tmp-*/
+pytest-*/
 
 .idea/

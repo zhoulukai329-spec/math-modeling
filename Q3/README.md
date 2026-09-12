@@ -1,8 +1,39 @@
 ﻿# 问题 3：十分钟滚动场景 MPC-MILP
 
 从仓库根目录运行。依赖 Python、NumPy、SciPy（支持 `optimize.milp`）、openpyxl；测试使用 pytest。
-附件保持只读。每个实际十分钟步都解 MILP，只执行当前场景共同动作，SOC 连续传递。
-0:00 发布全天基线，6/12/18 点修订剩余承诺；没有启发式调度替代或全年预计算结果。
+附件保持只读。默认高速后端在四个承诺事件求解MILP；逐十分钟MILP作为可选精度对照。
+0:00发布全天基线，6/12/18点修订剩余承诺，两种后端均连续传递SOC并遵守非前视规则。
+
+## 当前重构版的执行方式
+
+当前CLI默认使用`--backend event-policy`：每天只在0:00、6:00、12:00、18:00运行完整
+场景MILP，区间内按最近一次MILP给出的场景加权充电/放电参考和当前实际负荷、光伏执行。
+缺口超过建议放电量时由紧急购电补足，因此仍允许为未来保留电池。
+
+原来的逐十分钟求解没有删除，可通过`--backend rolling-milp`选择，只用于少数日期精度对照。
+代表日对照命令会同时报告费用、紧急购电、末端SOC和速度差：
+
+```powershell
+python Q3/src/compare_backends.py
+```
+
+`full`仍从1月1日开始暖机以保持SOC连续，但保存前会裁去`--date-start`以前的暖机行、
+求解日志和费用；正式2月至12月结果不再混入一月费用。
+
+12/18/24小时前瞻敏感性与论文图命令如下，不实现48/72小时外推：
+
+```powershell
+python Q3/src/run_horizon_sensitivity.py --scenarios 3
+python Q3/src/make_figures.py Q3/output/full_solution.npz
+```
+
+敏感性结果保存在`Q3/analysis`，属于四个代表日的局部比较，不是全年费用。绘图脚本只读取
+已有NPZ/CSV，不调用优化器，输出预测对照、购电—储能联动、费用风险、紧急购电热力图、
+求解性能、前瞻敏感性和调整时刻敏感性七组360 DPI PNG、SVG及PDF。其中调整时刻图按
+同一代表日相对“不调整”计算配对差，同时保留四个代表日原始点与四日均值。
+
+以下章节保留原始精细后端的完整数学说明；其中“每十分钟重解”仅对应
+`rolling-milp`，默认高速后端按本节说明执行。
 
 ## 现有实现如何解决问题 3
 
@@ -27,8 +58,8 @@ MILP，`simulation.py` 负责承诺版本、逐步执行和 SOC 传递，`make_r
 
 * 光伏采用附件 3 在 `r` 发布的 24 个整点值，在线性插值到十分钟网格后再换算为 kWh。
   发布时间前一小时沿用第一个预测值，超过 24 小时沿用最后一个值，不跨日拼接预测行。
-* 负荷预测是历史同一源列的均值，但历史样本严格要求其真实左端点早于 `r`；当前日和
-  未来日的实际负荷不会进入预测。
+* 负荷预测沿用 Q2 的因果规则：有七天历史时采用上周同一真实时间戳；年初历史不足时，
+  才使用发布时间前已揭示的历史同一源列均值。当前日尚未到达和未来日的实际负荷不会进入预测。
 * 二月及以后默认从最近 28 天的历史预测误差中抽取场景。误差定义为“实际光伏减去
   目标时刻当时最新发布的预测”，只揭示发布时间之前的误差单元；候选误差路径必须在
   当前发布时间之前结束，然后加到点预测并截断为非负。随机种子为 `seed + issue_day_index`，
@@ -80,8 +111,9 @@ incumbent 经过舍入后仍满足全部约束，就允许执行并记录 `optim
 1. 在开始日 00:00 求一次基线。基线承诺覆盖该业务日整行；即使普通执行窗口很短，
    基线/修订求解也会覆盖受影响行剩余的 144 列，窗口之外的下一业务日采购只是虚拟的
    1 倍电价前瞻量，直到该日午夜才进入实际台账。
-2. 每个十分钟执行点重新调用一次 MILP，只取解的第一格动作，更新真实 SOC，并把该格
-   标记为已执行。下一次求解使用连续传递的 SOC 和已经发布的承诺。
+2. 默认 `event-policy` 在事件间不重解 MILP，而是读取当前已发生的实际负荷/光伏，并按
+   最近事件 MILP 给出的场景加权充放电参考执行一格、更新真实 SOC。仅当选择
+   `rolling-milp` 对照后端时，才会每十分钟重解并只执行第一格。
 3. 在当天 06:00、12:00、18:00（可由 `revision_hours` 改变）求修订模型。已执行或已
    经过的承诺单元固定不变，只优化剩余单元；在午夜先冻结前一业务日的最后一个 00:00
    动作，再为新业务日发布新的基线。
@@ -105,20 +137,19 @@ incumbent 经过舍入后仍满足全部约束，就允许执行并记录 `optim
 `calibration.py` 只在 2025 年 1 月运行确定性暖机，分别试验
 `terminal_penalty = 0, 0.1, 0.5`，用“现金费用减去按最低电价折算的期末 SOC 残值”选取
 参数，并保存每次运行的 NPZ、独立校验和 SHA-256。当前仓库冻结文件
-`Q3/output/calibration/frozen_calibration.json` 选出的值为
+稳定的只读运行配置 `Q3/config/frozen_calibration.json` 记录的冻结值为
 `terminal_penalty=0.5`、`terminal_soc=6000`、`cvar_weight=0`、`cvar_alpha=0.9`；这
 是有限试验得到的设计配置，不是对所有超参数的统计最优证明。
 
 `complete_problem3.py` 会先完成上述一月校准（或读取冻结 JSON），再以 `H=144`、默认
-12 个场景连续模拟全年；`run_problem3.py --mode full` 也要求提供冻结 JSON，并记录求解
+12 个场景和 `event-policy` 连续模拟全年，并在保存前裁去一月；`run_problem3.py --mode full`
+也要求提供冻结 JSON，并记录求解
 状态、最优性间隙和完整性。`experiments.py` 在同一日期、种子和窗口下比较 8 种
 `revision_hours` 组合，只使用附件实际提供的 0/6/12/18 点预报，不虚构额外发布时间。
 
-需要注意当前代码的边界：`full` 和 `complete_problem3.py` 为了保持 SOC 连续，模拟起点
-固定为 2025-01-01，输出矩阵和 `result.total_cost` 也包含一月已经发布的承诺及其费用；
-一月费用并未在 `simulate` 内自动扣除。若论文只报告题目要求的 2 月 1 日至 12 月 31 日，
-应在汇总时显式剔除一月，或先修改费用汇总逻辑，不能直接把该 `total_cost` 标成 2--12 月
-费用。
+`full` 和 `complete_problem3.py` 为保持 SOC 连续，内部仍从 2025-01-01 暖机；写文件前由
+`trim_result` 按 `--date-start` 裁掉暖机行、暖机求解日志和一月费用。因此正式保存的
+`total_cost` 可直接解释为 2 月 1 日至 12 月 31 日费用。
 
 ### 6. 结果和独立复核
 
@@ -191,8 +222,8 @@ Windows 如系统旧 `pytest-of-*` 临时目录权限异常，可指定一个尚
 ## 全年与实验接口
 
 ```powershell
-python Q3/src/run_problem3.py --mode full --calibration Q3/output/calibration/frozen_calibration.json --date-start 2025-02-01 --date-end 2025-12-31
-python Q3/src/run_problem3.py --mode experiments
+python Q3/src/run_problem3.py --mode full --calibration Q3/config/frozen_calibration.json --date-start 2025-02-01 --date-end 2025-12-31
+python Q3/src/run_problem3.py --mode experiments --output-dir Q3/analysis
 ```
 
 `full` 默认 H=144、K=12、全年所选区间无步数限制，运行量可能很大。
@@ -205,7 +236,8 @@ full 禁止命令行覆盖这些冻结值。JSON 是实验流程的输入凭据�
 `full` 为保持全年 SOC 连续而从 1 月 1 日启动；`smoke` 和 `experiments` 则按
 `--date-start` 独立启动，不自动继承一月终态。
 `--max-steps` 可限制 full 调试，但输出仍记录 `complete: false`，不得称作全年完成。
-`experiments` 默认用一个完整业务日比较 8 种调整时钟组合：不调整、三个单时刻、
-三个双时刻和 6/12/18 全部调整。它回答的是题目所给 6/12/18 预报是否值得用于调整，
+`experiments` 默认用 2/1、5/1、8/1、11/1 四个季节代表日比较 8 种调整时钟组合：不调整、
+三个单时刻、三个双时刻和 6/12/18 全部调整；每组使用正式 24 小时前瞻、12 个场景、
+`terminal_penalty=0.5` 和 `event-policy`。它回答的是题目所给 6/12/18 预报是否值得用于调整，
 不会凭空制造附件 3 中不存在的 3/9/15/21 点预报。
 每次运行覆盖同一输出目录内对应模式文件及 `result3.xlsx`；保留不同试验请使用不同 `--output-dir`。

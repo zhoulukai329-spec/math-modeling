@@ -1,0 +1,13 @@
+{
+  "frozen": true,
+  "training_start": "2025-01-01",
+  "training_end": "2025-01-31",
+  "parameters": {
+    "terminal_penalty": 0.5,
+    "terminal_soc": 6000.0,
+    "cvar_weight": 0.0,
+    "cvar_alpha": 0.9
+  },
+  "selection": "January-only calibration selected terminal_penalty=0.5 from 0, 0.1 and 0.5 using cash cost less terminal SOC salvage value.",
+  "purpose": "Stable read-only runtime configuration; generated calibration evidence remains under Q3/output and is not modified by source updates."
+}

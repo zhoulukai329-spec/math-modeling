@@ -191,3 +191,49 @@ def test_soc_roundoff_is_clipped_but_real_bound_violation_is_rejected(sim):
     assert sim._clip_soc_roundoff(10800.000000000002, 1200.0, 10800.0) == 10800.0
     with pytest.raises(sim.SimulationSolveError, match="outside bounds"):
         sim._clip_soc_roundoff(1199.99, 1200.0, 10800.0)
+
+
+def test_event_policy_solves_only_at_commitment_events_and_executes_every_step(sim):
+    data = inputs()
+    result = sim.simulate(
+        config(sim, data, backend="event-policy", max_steps=37, deterministic=True),
+        data.dates[1], data.dates[1],
+    )
+    assert result.executed.sum() == 37
+    assert [row["kind"] for row in result.solve_log] == ["baseline", "revision"]
+    assert all(row["backend"] == "event-policy" for row in result.solve_log)
+    np.testing.assert_allclose(result.emergency[0, :37], 0.0)
+    assert np.isfinite(result.discharge_reference[0, :37]).all()
+
+
+def test_event_policy_does_not_use_unrevealed_future_actuals(sim):
+    data = inputs()
+    baseline = sim.simulate(
+        config(sim, data, backend="event-policy", max_steps=3),
+        data.dates[1], data.dates[1],
+    )
+    changed_data = replace(data, load_energy=data.load_energy.copy(), pv_energy=data.pv_energy.copy())
+    changed_data.load_energy[1, 3:] = 9999
+    changed_data.pv_energy[1, 3:] = 9999
+    changed = sim.simulate(
+        config(sim, changed_data, backend="event-policy", max_steps=3),
+        data.dates[1], data.dates[1],
+    )
+    for name in ("baseline", "charge", "discharge", "emergency", "soc_after"):
+        np.testing.assert_allclose(getattr(baseline, name), getattr(changed, name), equal_nan=True)
+
+
+def test_backend_name_is_validated(sim):
+    with pytest.raises(ValueError, match="backend"):
+        config(sim, inputs(), backend="unknown")
+
+
+def test_independent_verifier_accepts_event_log_without_fake_execution_solves(sim):
+    verifier = importlib.import_module("verify_problem3")
+    data = inputs()
+    result = sim.simulate(
+        config(sim, data, backend="event-policy", max_steps=3),
+        data.dates[1], data.dates[1],
+    )
+    report = verifier.verify_solution(result)
+    assert report["passed"], report["errors"]
