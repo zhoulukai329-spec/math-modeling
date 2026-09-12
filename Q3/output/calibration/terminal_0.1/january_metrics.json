@@ -38,12 +38,12 @@
   "complete": true,
   "costs": {
     "baseline": 1451936.9089767127,
-    "revision_up": 105245.37544801572,
+    "revision_up": 105589.82333957564,
     "revision_down": 0.0,
-    "emergency": 1306921.09125547
+    "emergency": 1308300.359867529
   },
-  "total_cost": 2864103.3756801984,
-  "elapsed_seconds": 177.15406780000194,
+  "total_cost": 2865827.092183817,
+  "elapsed_seconds": 196.6840812000155,
   "solve_count": 4588,
   "optimal_solve_count": 4588,
   "config": {
@@ -68,7 +68,7 @@
     "charge_efficiency": 0.9,
     "discharge_efficiency": 0.9,
     "terminal_soc": 6000.0,
-    "terminal_penalty": 0.0,
+    "terminal_penalty": 0.1,
     "throughput_penalty": 1e-06,
     "cvar_weight": 0.0,
     "cvar_alpha": 0.9,

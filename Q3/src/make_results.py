@@ -1,6 +1,6 @@
 ﻿"""Preserve the official template; persist actual trajectories and full ledgers."""
 from __future__ import annotations
-
+import io
 import csv
 from dataclasses import fields
 from datetime import date, datetime, time, timedelta
@@ -147,7 +147,12 @@ def save_result(result: SimulationResult, output_dir: str | Path, *, prefix: str
 
 
 def load_result(path: str | Path) -> SimulationResult:
-    with np.load(path, allow_pickle=False) as saved:
+    path = Path(path)
+    # Some file-transfer tools prepend a UTF-8 BOM to binary files.
+    # Strip only that known wrapper; pickle loading remains disabled.
+    raw = path.read_bytes()
+    source = raw[3:] if raw.startswith(b"\xef\xbb\xbf") else raw
+    with np.load(io.BytesIO(source), allow_pickle=False) as saved:
         metadata = json.loads(str(saved["metadata_json"].item()))
         if metadata["schema_version"] != 1:
             raise ValueError("unsupported solution schema")

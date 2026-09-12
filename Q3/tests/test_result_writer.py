@@ -89,6 +89,14 @@ def test_npz_roundtrip_and_csv_retain_versions_and_unknowns(writer, verifier, re
     assert verifier.verify_solution(restored, workbook_path=paths["workbook"])["passed"]
 
 
+def test_load_result_accepts_utf8_bom_wrapped_npz(writer, result, tmp_path):
+    paths = writer.save_result(result, tmp_path, prefix="bom")
+    wrapped = tmp_path / "bom_wrapped.npz"
+    wrapped.write_bytes(b"\xef\xbb\xbf" + paths["solution"].read_bytes())
+    restored = writer.load_result(wrapped)
+    np.testing.assert_equal(restored.executed, result.executed)
+
+
 @pytest.mark.parametrize("damage,match", [
     ("balance", "balance"), ("soc", "SOC"), ("mode", "mode"),
     ("timestamp", "timestamp"), ("cost", "cost"),

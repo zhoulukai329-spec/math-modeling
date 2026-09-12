@@ -37,13 +37,13 @@
   "selected_steps": 4464,
   "complete": true,
   "costs": {
-    "baseline": 1451936.9089767127,
-    "revision_up": 105245.37544801572,
+    "baseline": 1462865.041342891,
+    "revision_up": 100861.33782085874,
     "revision_down": 0.0,
-    "emergency": 1306921.09125547
+    "emergency": 1286850.3437790559
   },
-  "total_cost": 2864103.3756801984,
-  "elapsed_seconds": 177.15406780000194,
+  "total_cost": 2850576.722942806,
+  "elapsed_seconds": 182.06438220001291,
   "solve_count": 4588,
   "optimal_solve_count": 4588,
   "config": {
@@ -68,14 +68,14 @@
     "charge_efficiency": 0.9,
     "discharge_efficiency": 0.9,
     "terminal_soc": 6000.0,
-    "terminal_penalty": 0.0,
+    "terminal_penalty": 0.5,
     "throughput_penalty": 1e-06,
     "cvar_weight": 0.0,
     "cvar_alpha": 0.9,
     "time_limit": 30,
     "mip_rel_gap": 0.0001
   },
-  "final_soc": 7505.757493828223,
+  "final_soc": 10800.0,
   "cost_scope": "Full issued commitments and adjacent-version fees; emergency only for executed steps.",
   "calibration": "Explicit configuration; no calibration inferred from this result."
 }

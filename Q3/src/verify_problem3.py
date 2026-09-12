@@ -10,7 +10,7 @@ import numpy as np
 from openpyxl import load_workbook
 
 
-def verify_solution(result, *, workbook_path=None, template_path=None, tolerance=1e-5):
+def verify_solution(result, *, workbook_path=None, template_path=None, tolerance=1e-6):
     errors = []
     residuals = {}
 

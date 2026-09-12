@@ -1,0 +1,141 @@
+[
+  {
+    "revision_hours": [],
+    "costs": {
+      "baseline": 43510.13932127292,
+      "revision_up": 0.0,
+      "revision_down": 0.0,
+      "emergency": 0.0
+    },
+    "total_cost": 43510.13932127292,
+    "emergency_energy": 0.0,
+    "emergency_intervals": 0,
+    "minimum_soc": 6000.0,
+    "executed_steps": 37,
+    "verified": true
+  },
+  {
+    "revision_hours": [
+      6
+    ],
+    "costs": {
+      "baseline": 43510.13932127292,
+      "revision_up": 3647.740345604584,
+      "revision_down": 0.0,
+      "emergency": 0.0
+    },
+    "total_cost": 47157.87966687751,
+    "emergency_energy": 0.0,
+    "emergency_intervals": 0,
+    "minimum_soc": 6000.0,
+    "executed_steps": 37,
+    "verified": true
+  },
+  {
+    "revision_hours": [
+      12
+    ],
+    "costs": {
+      "baseline": 43510.13932127292,
+      "revision_up": 0.0,
+      "revision_down": 0.0,
+      "emergency": 0.0
+    },
+    "total_cost": 43510.13932127292,
+    "emergency_energy": 0.0,
+    "emergency_intervals": 0,
+    "minimum_soc": 6000.0,
+    "executed_steps": 37,
+    "verified": true
+  },
+  {
+    "revision_hours": [
+      18
+    ],
+    "costs": {
+      "baseline": 43510.13932127292,
+      "revision_up": 0.0,
+      "revision_down": 0.0,
+      "emergency": 0.0
+    },
+    "total_cost": 43510.13932127292,
+    "emergency_energy": 0.0,
+    "emergency_intervals": 0,
+    "minimum_soc": 6000.0,
+    "executed_steps": 37,
+    "verified": true
+  },
+  {
+    "revision_hours": [
+      6,
+      12
+    ],
+    "costs": {
+      "baseline": 43510.13932127292,
+      "revision_up": 3647.740345604584,
+      "revision_down": 0.0,
+      "emergency": 0.0
+    },
+    "total_cost": 47157.87966687751,
+    "emergency_energy": 0.0,
+    "emergency_intervals": 0,
+    "minimum_soc": 6000.0,
+    "executed_steps": 37,
+    "verified": true
+  },
+  {
+    "revision_hours": [
+      6,
+      18
+    ],
+    "costs": {
+      "baseline": 43510.13932127292,
+      "revision_up": 3647.740345604584,
+      "revision_down": 0.0,
+      "emergency": 0.0
+    },
+    "total_cost": 47157.87966687751,
+    "emergency_energy": 0.0,
+    "emergency_intervals": 0,
+    "minimum_soc": 6000.0,
+    "executed_steps": 37,
+    "verified": true
+  },
+  {
+    "revision_hours": [
+      12,
+      18
+    ],
+    "costs": {
+      "baseline": 43510.13932127292,
+      "revision_up": 0.0,
+      "revision_down": 0.0,
+      "emergency": 0.0
+    },
+    "total_cost": 43510.13932127292,
+    "emergency_energy": 0.0,
+    "emergency_intervals": 0,
+    "minimum_soc": 6000.0,
+    "executed_steps": 37,
+    "verified": true
+  },
+  {
+    "revision_hours": [
+      6,
+      12,
+      18
+    ],
+    "costs": {
+      "baseline": 43510.13932127292,
+      "revision_up": 3647.740345604584,
+      "revision_down": 0.0,
+      "emergency": 0.0
+    },
+    "total_cost": 47157.87966687751,
+    "emergency_energy": 0.0,
+    "emergency_intervals": 0,
+    "minimum_soc": 6000.0,
+    "executed_steps": 37,
+    "verified": true
+  }
+]

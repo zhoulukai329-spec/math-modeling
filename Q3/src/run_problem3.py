@@ -16,7 +16,7 @@ from verify_problem3 import verify_solution
 def build_parser():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--mode", choices=("smoke", "full", "experiments"), default="smoke")
-    parser.add_argument("--date-start", default="2025-02-01")
+    parser.add_argument("--date-start", default="2025-01-01")
     parser.add_argument("--date-end")
     parser.add_argument("--horizon-steps", type=int)
     parser.add_argument("--max-steps", type=int)
@@ -78,7 +78,8 @@ def main(argv=None):
         mip_rel_gap=args.mip_rel_gap, deterministic=args.deterministic, initial_soc=args.initial_soc,
         revision_hours=tuple(args.revision_hours), **tuning)
     end = args.date_end or (args.date_start if args.mode == "smoke" else "2025-12-31")
-    result = simulate(config, args.date_start, end)
+    sim_start = "2025-01-01" if args.mode == "full" else args.date_start
+    result = simulate(config, sim_start, end)
     report = verify_solution(result)
     if not report["passed"]:
         raise RuntimeError(f"simulation failed independent verification: {report['errors']}")

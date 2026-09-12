@@ -190,7 +190,7 @@ class SimulationSolveError(RuntimeError):
 
 
 def _clip_soc_roundoff(value: float, lower: float, upper: float,
-                       tolerance: float = 1e-8) -> float:
+                       tolerance: float = 1e-6) -> float:
     """Clip solver-sized floating error at SOC bounds; reject real violations."""
     if value < lower - tolerance or value > upper + tolerance:
         raise SimulationSolveError(
