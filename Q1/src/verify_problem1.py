@@ -395,16 +395,19 @@ def main():
 
     print("\n[1] 不同算法交叉重算")
     ref_obj = None
+    algorithms_ok = True
     for method in ("highs", "highs-ds", "highs-ipm"):
         r = linprog(c_obj, A_ub=A_ub, b_ub=b_ub, A_eq=A_eq, b_eq=b_eq,
                     bounds=bounds, method=method)
-        print(f"  {method:10s} success={r.success} objective={r.fun:.10f}")
+        print(f"  {method:10s} success={r.success} objective={r.fun}")
         if not r.success:
+            algorithms_ok = False
             print(f"  [FAIL] {method} 未得到最优解: {r.message}")
             continue
         if ref_obj is None:
             ref_obj = r.fun
         elif abs(r.fun - ref_obj) > 1e-5:
+            algorithms_ok = False
             print(f"  [FAIL] {method} 目标值与 highs 不一致")
 
     print("\n[2] 原始可行性")
@@ -422,12 +425,16 @@ def main():
     ok_file = check_result_file(x, c, d, E)
 
     print("\n" + "=" * 76)
-    if ok_primal and ok_kkt and ok_tables and ok_file:
+    passed = algorithms_ok and ok_primal and ok_kkt and ok_tables and ok_file
+    if passed:
         print("结论: 模型检验 PASS。求解结果满足全部约束，且 KKT 条件成立。")
     else:
         print("结论: 模型检验存在 FAIL 项，请检查建模、数值精度或结果文件对齐。")
     print("=" * 76)
 
 
+    return 0 if passed else 1
+
+
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

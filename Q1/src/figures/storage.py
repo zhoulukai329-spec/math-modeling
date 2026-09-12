@@ -8,7 +8,7 @@ def render(z):
     E = z["E"]
     t = np.arange(len(E)) / 6
     fig, ax = plt.subplots(figsize=(12, 5.5), layout="constrained")
-    fig.suptitle("Q1 · 图4  储能电量与容量约束")
+    fig.suptitle("储能电量与容量约束")
     ax.plot(t, E, color=PURPLE, lw=1.5, marker="o", markersize=2.3)
     for value, label in [(10800, "上限 10,800 kWh"), (1200, "下限 1,200 kWh")]:
         ax.axhline(value, color=BLACK, lw=0.9, ls="--")

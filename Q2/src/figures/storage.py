@@ -11,7 +11,7 @@ def render(z):
     h = np.arange(E.shape[1]) / 6
     q10, q25, median, q75, q90 = np.quantile(E, [0.1, 0.25, 0.5, 0.75, 0.9], axis=0) / 1000
     fig, (a, b) = plt.subplots(2, 1, figsize=(12, 7.8), layout="constrained")
-    fig.suptitle("Q2 · 图4  日内储能分布与跨日衔接")
+    fig.suptitle("日内储能分布与跨日衔接")
     a.vlines(h, q10, q90, color=SKY, lw=3.8, alpha=0.55, label="同一时刻 P10—P90")
     a.vlines(h, q25, q75, color=BLUE, lw=2.5, label="同一时刻 P25—P75")
     a.scatter(h, median, s=9, color=BLACK, zorder=4, label="中位数")

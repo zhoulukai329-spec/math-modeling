@@ -30,6 +30,18 @@ def trim_result(result: SimulationResult, date_start) -> SimulationResult:
     timestamps = result.timestamps[keep].copy()
     versions = tuple(v for v in result.versions if v.target_times[0].date() in set(dates))
     mask = arrays["executed"]
+    if not mask.any():
+        raise ValueError("trimmed result has no executed intervals")
+    midnight = datetime.combine(dates[0], time())
+    boundary = result.calendar_boundary
+    if boundary and boundary["timestamp"] != midnight.isoformat():
+        boundary = None
+    positions = np.argwhere((result.timestamps == midnight) & result.executed)
+    if len(positions):
+        i, j = positions[0]
+        boundary = dict(timestamp=midnight.isoformat(), **{
+            name: float(getattr(result, name)[i, j])
+            for name in ("charge", "discharge", "soc_before", "soc_after")})
     costs = {"baseline": float(sum(v.baseline_cost for v in versions)),
              "revision_up": float(sum(v.up_cost for v in versions)),
              "revision_down": float(sum(v.down_cost for v in versions)),
@@ -46,7 +58,7 @@ def trim_result(result: SimulationResult, date_start) -> SimulationResult:
             entry["trimmed_warmup_boundary"] = True
     initial_soc = float(arrays["soc_before"][mask][0])
     return replace(result, dates=dates, timestamps=timestamps, versions=versions,
-                   costs=costs, solve_log=solve_log,
+                   costs=costs, solve_log=solve_log, calendar_boundary=boundary,
                    config=replace(result.config, initial_soc=initial_soc), **arrays)
 
 
@@ -64,78 +76,8 @@ def _configuration(config):
 
 def write_result43(result: SimulationResult, output_path: str | Path,
                   template_path: str | Path = DEFAULT_TEMPLATE) -> Path:
-    """Fill only template anchors. Unknown physical values stay blank.
-
-    Adjusted quantities are final commitments; its cost column contains actual
-    upward PLUS downward revision fees (baseline is in the preceding sheet).
-    Battery blocks use literal calendar left endpoints, never a rotated row.
-    Emergency slots list each observed positive interval in a multiline cell,
-    with a numeric total; this preserves the fixed illustrative template rows.
-    """
-    output_path, template_path = Path(output_path), Path(template_path)
-    if output_path.resolve() == template_path.resolve():
-        raise ValueError("output must not overwrite the attachment template")
-    workbook = load_workbook(template_path)
-    date_index = {day: row for row, day in enumerate(result.dates)}
-    for name, array in (("计划购电量", result.baseline), ("调整购电量", result.final_commitment)):
-        sheet = workbook[name]
-        for row in range(2, sheet.max_row + 1):
-            day = coerce_date(sheet.cell(row, 1).value)
-            if day not in date_index:
-                continue
-            i = date_index[day]
-            values = array[i]
-            for column, value in enumerate(values, 2):
-                sheet.cell(row, column).value = float(value) if np.isfinite(value) else None
-            if np.isfinite(values).all():
-                sheet.cell(row, 146).value = float(values.sum())
-                sheet.cell(row, 147).value = (float(result.price[i] @ values) if name == "计划购电量" else
-                    float(sum(v.up_cost + v.down_cost for v in result.versions if v.target_times[0].date() == day)))
-
-    actual = {stamp: (i, j) for i, row in enumerate(result.timestamps)
-              for j, stamp in enumerate(row) if result.executed[i, j]}
-    sheet = workbook["充放电量"]
-    for row in range(2, sheet.max_row + 1):
-        value = sheet.cell(row, 1).value
-        if not isinstance(value, (date, datetime)):
-            continue
-        day = coerce_date(value)
-        midnight = datetime.combine(day, time())
-        for block in range(6):
-            times = [midnight + timedelta(hours=4 * block, minutes=10 * k) for k in range(24)]
-            if all(stamp in actual for stamp in times):
-                for column, name in ((3, "charge"), (4, "discharge")):
-                    sheet.cell(row + block, column).value = float(sum(getattr(result, name)[actual[t]] for t in times))
-        for offset, stamp in ((0, midnight), (1, midnight + timedelta(days=1))):
-            # A state at t is BEFORE execution of [t,t+10m).
-            if stamp in actual:
-                soc = result.soc_before[actual[stamp]]
-            elif stamp - timedelta(minutes=10) in actual:
-                soc = result.soc_after[actual[stamp - timedelta(minutes=10)]]
-            elif day == result.dates[0] and offset == 0:
-                soc = result.config.initial_soc
-            else:
-                continue
-            sheet.cell(row + offset, 6).value = float(soc)
-
-    sheet = workbook["紧急购电量"]
-    labels = [workbook["计划购电量"].cell(1, j + 2).value for j in range(144)]
-    for row in range(2, sheet.max_row + 1):
-        value = sheet.cell(row, 1).value
-        if not isinstance(value, (date, datetime)) or coerce_date(value) not in date_index:
-            continue
-        i = date_index[coerce_date(value)]
-        mask = result.executed[i]
-        if not mask.any():
-            continue
-        positives = [j for j in range(144) if mask[j] and result.emergency[i, j] > 1e-7]
-        if positives or mask.all():
-            prefix = "" if mask.all() else "已执行部分：\n"
-            sheet.cell(row, 2).value = prefix + ("\n".join(labels[j] for j in positives) if positives else "无")
-            sheet.cell(row, 3).value = float(result.emergency[i, mask].sum())
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    workbook.save(output_path)
-    return output_path
+    from dispatch_core.result_workbook import write_workbook
+    return write_workbook(result, output_path, template_path)
 
 
 def save_result43(result: SimulationResult, output_dir: str | Path, *, prefix: str = "smoke",
@@ -147,7 +89,7 @@ def save_result43(result: SimulationResult, output_dir: str | Path, *, prefix: s
                  trajectory=output_dir / f"{prefix}_trajectory.csv", workbook=output_dir / "result4-3.xlsx")
     metadata = dict(schema_version=1, dates=[str(d) for d in result.dates], costs=result.costs,
                     config=_configuration(result.config), solve_log=result.solve_log,
-                    elapsed_seconds=result.elapsed_seconds,
+                    elapsed_seconds=result.elapsed_seconds, calendar_boundary=result.calendar_boundary,
                     versions=[dict(issued_at=v.issued_at.isoformat(), kind=v.kind,
                                    target_times=[t.isoformat() for t in v.target_times],
                                    baseline_cost=v.baseline_cost, up_cost=v.up_cost, down_cost=v.down_cost)
@@ -203,4 +145,5 @@ def load_result(path: str | Path) -> SimulationResult:
             timestamps=np.asarray([[datetime.fromisoformat(t) for t in row] for row in saved["timestamps"]], dtype=object),
             versions=tuple(versions), config=SimulationConfig(**config), costs=metadata["costs"],
             solve_log=metadata["solve_log"], elapsed_seconds=metadata["elapsed_seconds"],
+            calendar_boundary=metadata.get("calendar_boundary"),
             **restored)

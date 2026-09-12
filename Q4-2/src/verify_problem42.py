@@ -20,6 +20,20 @@ TOL = 1e-5
 def check_solution(z):
     g, c, d, w, e, E, net = (z[k] for k in ["g","c","d","w","e","E","net"])
     price = z["price"]
+    for key in ("g", "c", "d", "w", "e", "E", "net", "price",
+                "planned_cost", "emergency_cost", "total_cost"):
+        if not np.isfinite(z[key]).all():
+            raise AssertionError(f"{key}含有缺失值或无穷大")
+    if any(value.shape != g.shape for value in (c, d, w, e, net)):
+        raise AssertionError("功率/电量矩阵形状不一致")
+    if E.shape != (g.shape[0], g.shape[1] + 1):
+        raise AssertionError("SOC矩阵形状错误")
+    if np.any(c > dio.C_MAX + TOL) or np.any(d > dio.C_MAX + TOL):
+        raise AssertionError("充放电量超过设备上限")
+    if np.any((c > TOL) & (d > TOL)):
+        raise AssertionError("同一时段同时充电和放电")
+    if np.any(w < -TOL):
+        raise AssertionError("出现负弃电量")
     if price.shape != g.shape:
         raise AssertionError(f"动态电价应与购电矩阵同形，实际{price.shape}和{g.shape}")
     balance = g + e + d - c - w - net
@@ -39,7 +53,7 @@ def check_solution(z):
     }
     for name, value in checks.items():
         print(f"  {name}: {value:.3e}")
-        if value > TOL:
+        if not np.isfinite(value) or value > TOL:
             raise AssertionError(f"{name}超过容差{TOL}: {value}")
     if np.any(g < -TOL) or np.any(c < -TOL) or np.any(d < -TOL) or np.any(e < -TOL):
         raise AssertionError("出现负的购电/充电/放电/应急量")
@@ -84,23 +98,61 @@ def check_workbook(z, workbook):
             raise AssertionError(f"计划购电量第{i+2}行合计不一致")
         if abs(float(plan[i+1][146])-float(ordered_price @ ordered)) > 1e-4:
             raise AssertionError(f"计划购电费用第{i+2}行不一致")
-    print("  result4-2.xlsx计划表与NPZ: PASS")
+    def compare(row, expected, label):
+        row = list(row) + [None] * max(0, len(expected) - len(row))
+        for actual, value in zip(row, expected):
+            if isinstance(value, (float, int, np.number)):
+                if actual is None or not np.isfinite(float(actual)) or abs(float(actual)-value) > 1e-4:
+                    raise AssertionError(label)
+            elif actual != value:
+                raise AssertionError(label)
+    battery = sheets["充放电量"]
+    if len(battery) != 1 + 6 * len(dates):
+        raise AssertionError("充放电表日期覆盖不完整")
+    for i, day in enumerate(dates):
+        for j in range(6):
+            compare(battery[1+6*i+j], [
+                float(day) if j == 0 else None,
+                dio.block_labels()[j],
+                float(z["c"][i,j*24:(j+1)*24].sum()),
+                float(z["d"][i,j*24:(j+1)*24].sum()),
+                "0:00" if j == 0 else "24:00" if j == 1 else None,
+                float(z["E"][i,0]) if j == 0 else float(z["E"][i,-1]) if j == 1 else None,
+            ], "充放电表与NPZ不一致")
+    expected = []
+    for i, day in enumerate(dates):
+        indices = np.flatnonzero(z["e"][i] > 1e-7)
+        runs = np.split(indices, np.flatnonzero(np.diff(indices) != 1)+1) if len(indices) else []
+        for k, run in enumerate(runs):
+            a, b = int(run[0])*10, (int(run[-1])+1)*10
+            expected.append([float(day) if k == 0 else None,
+                             f"{a//60}:{a%60:02d}-{b//60}:{b%60:02d}",
+                             float(z["e"][i,run].sum())])
+    if len(sheets["紧急购电量"]) != len(expected)+1:
+        raise AssertionError("紧急购电记录不完整")
+    for row, wanted in zip(sheets["紧急购电量"][1:], expected):
+        compare(row, wanted, "紧急购电时间段或电量错误")
+    print("  result4-2.xlsx三张表与NPZ: PASS")
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument("solution", nargs="?", default=str(dio.SOLUTION_NPZ))
     parser.add_argument("--workbook", default=str(dio.RESULT42))
+    parser.add_argument("--skip-workbook", action="store_true",
+                        help="仅检查数值档案，不声称工作簿校验通过")
     args = parser.parse_args(argv)
     with np.load(args.solution, allow_pickle=False) as z:
         print("[1] 数值约束与动态费用")
         check_solution(z)
         print("[2] 价格预测非前视")
         check_causality()
-        if Path(args.workbook).exists():
+        if not args.skip_workbook:
+            if not Path(args.workbook).exists():
+                raise FileNotFoundError(args.workbook)
             print("[3] 正式工作簿")
             check_workbook(z, Path(args.workbook))
-    print("Q4-2校验 PASS")
+    print("Q4-2数值校验 PASS（未检查工作簿）" if args.skip_workbook else "Q4-2校验 PASS")
 
 
 if __name__ == "__main__":

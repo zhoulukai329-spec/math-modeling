@@ -9,7 +9,7 @@ def render(z):
     net = z["load_kw"] - z["pv_kw"]
     buy = z["x"] * 6
     fig, ax = plt.subplots(figsize=(12, 5.6), layout="constrained")
-    fig.suptitle("Q1 · 图2  储能调节前后的供电需求")
+    fig.suptitle("储能调节前后的供电需求")
     ax.bar(t, buy, width=0.14, color=GREEN, alpha=0.8, label="计划购电（每柱 10 分钟）")
     ax.scatter(t, net, s=16, facecolor="white", edgecolor=BLACK,
                linewidth=0.8, label="净负荷（负荷 − 光伏）", zorder=4)

@@ -170,6 +170,7 @@ def check_xlsx(z):
             ok &= abs(row[1 + dio.N] - ordered.sum()) <= 1e-4
             ok &= abs(row[2 + dio.N] - ordered_price @ ordered) <= 1e-4
         print(f"  计划购电量最大数值误差: {max_diff:.3e}")
+        ok &= np.isfinite(max_diff) and max_diff <= 1e-4
 
     charge = sheets["充放电量"]
     ok &= len(charge) == 1 + 6 * len(dates)
@@ -222,8 +223,9 @@ def main():
     else:
         print("结论: 存在 FAIL 项，请检查模型、数值精度或结果文件。")
     print("=" * 76)
+    return 0 if ok1 and ok2 and ok3 and ok4 and ok5 else 1
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
 

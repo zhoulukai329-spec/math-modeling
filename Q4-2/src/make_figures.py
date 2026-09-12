@@ -87,7 +87,7 @@ def render_forecast(z) -> plt.Figure:
     idx = representative_index(z)
     t = time_axis(z["price"].shape[1])
     fig, axes = plt.subplots(2, 1, figsize=(7.2, 5.1), sharex=True, layout="constrained")
-    fig.suptitle(f"Q4-2 代表日预测与实际值对照（{dates[idx]:%Y-%m-%d}）")
+    fig.suptitle(f"代表日预测与实际值对照（{dates[idx]:%Y-%m-%d}）")
 
     axes[0].plot(t, z["price"][idx], color=TEAL, lw=1.7, label="实际电价")
     axes[0].plot(t, z["price_forecast"][idx], color=BLUE, lw=1.4, ls="--", label="0:00可用预测")
@@ -113,7 +113,7 @@ def render_dispatch(z) -> plt.Figure:
     te = np.arange(z["E"].shape[1]) / 6.0
     fig, axes = plt.subplots(4, 1, figsize=(7.2, 8.1), sharex=True, layout="constrained",
                              gridspec_kw={"height_ratios": [1.0, 1.8, 1.2, 1.0]})
-    fig.suptitle(f"Q4-2 动态电价下的购电—储能协同响应（{dates[idx]:%Y-%m-%d}）")
+    fig.suptitle(f"动态电价下的购电—储能协同响应（{dates[idx]:%Y-%m-%d}）")
 
     axes[0].step(t, z["price"][idx], where="mid", color=ORANGE, lw=1.5)
     axes[0].set_ylabel("电价\n（元/kWh）")
@@ -153,7 +153,7 @@ def render_annual(z) -> plt.Figure:
     daily_e = np.asarray(z["e"]).sum(axis=1) / 1000
     x = np.arange(len(labels))
     fig, axes = plt.subplots(2, 1, figsize=(7.2, 5.8), layout="constrained")
-    fig.suptitle("Q4-2 月度费用构成与逐日应急风险")
+    fig.suptitle("月度费用构成与逐日应急风险")
 
     axes[0].bar(x, planned, color=BLUE, width=0.68, label="计划购电费")
     axes[0].bar(x, emergency_cost, bottom=planned, color=VERMILION, width=0.68, label="紧急购电费")
@@ -186,7 +186,7 @@ def render_emergency_heatmap(z) -> plt.Figure:
     fig, ax = plt.subplots(figsize=(7.2, 5.1), layout="constrained")
     mesh = ax.pcolormesh(hour_edges, day_edges, e, shading="flat", cmap=cmap,
                          norm=PowerNorm(gamma=0.55, vmin=0, vmax=vmax), rasterized=True)
-    ax.set_title("Q4-2 紧急购电发生的日期—时段分布")
+    ax.set_title("紧急购电发生的日期—时段分布")
     ax.set_xlabel("时刻（h）")
     ax.set_ylabel("日期")
     ax.set_xticks(np.arange(0, 25, 4))

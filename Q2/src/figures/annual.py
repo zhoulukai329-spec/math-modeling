@@ -11,7 +11,7 @@ def render(z):
     planned = np.array([z["planned_cost"][months == m].sum() for m in groups]) / 1e4
     emergency = np.array([z["emergency_cost"][months == m].sum() for m in groups]) / 1e4
     fig, (a, b) = plt.subplots(2, 1, figsize=(12, 7.8), layout="constrained")
-    fig.suptitle("Q2 · 图1  月度费用构成与逐日应急风险")
+    fig.suptitle("月度费用构成与逐日应急风险")
     a.bar(groups, planned, width=0.65, color=GREEN, label="计划购电费")
     a.bar(groups, emergency, bottom=planned, width=0.65, color=RED, label="紧急购电费")
     a.set_xticks(groups, [f"{m}月" for m in groups])

@@ -18,7 +18,7 @@ def render(z):
     emax = max(1, emergency[indices].max() * 1.35)
     fig = plt.figure(figsize=(14, 9.5), layout="constrained")
     grid = fig.add_gridspec(4, 2, height_ratios=[2.5, 1, 2.5, 1], hspace=0.16)
-    fig.suptitle("Q2 · 图2  四个指定日的计划购电与实时缺口")
+    fig.suptitle("四个指定日的计划购电与实时缺口")
     for n, (target, i) in enumerate(zip(targets, indices)):
         row, col = (n // 2) * 2, n % 2
         a = fig.add_subplot(grid[row, col])

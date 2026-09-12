@@ -177,82 +177,10 @@ def verify_solution43(result, *, workbook_path=None, template_path=None, toleran
 
 
 def _verify_workbook(result, path, template_path, require, tolerance):
-    """Reconstruct expected cells independently of the writer, including blanks."""
+    from dispatch_core.result_workbook import verify_workbook
     if template_path is None:
         template_path = Path(__file__).resolve().parents[2] / "attachment/附件5/result4-3.xlsx"
-    original, workbook = load_workbook(template_path), load_workbook(path)
-    require(workbook.sheetnames == original.sheetnames, "workbook sheets")
-    if workbook.sheetnames != original.sheetnames:
-        return
-    expected = {}
-    def put(name, r, c, value):
-        expected[name, r, c] = value
-    by_day = {day: i for i, day in enumerate(result.dates)}
-    for name, array in (("计划购电量", result.baseline), ("调整购电量", result.final_commitment)):
-        for row in range(2, original[name].max_row + 1):
-            day = original[name].cell(row, 1).value.date()
-            if day not in by_day:
-                continue
-            i = by_day[day]
-            for j in range(144):
-                put(name, row, j + 2, float(array[i, j]) if np.isfinite(array[i, j]) else None)
-            if np.isfinite(array[i]).all():
-                put(name, row, 146, float(array[i].sum()))
-                fees = float(result.price[i] @ result.baseline[i]) if name == "计划购电量" else sum(
-                    v.up_cost + v.down_cost for v in result.versions if v.target_times[0].date() == day)
-                put(name, row, 147, fees)
-    stamps = list(result.timestamps[result.executed])
-    data = {name: getattr(result, name)[result.executed] for name in ("charge", "discharge", "soc_before", "soc_after")}
-    stamp_index = {stamp: i for i, stamp in enumerate(stamps)}
-    sheet = original["充放电量"]
-    for r in range(2, sheet.max_row + 1):
-        day = sheet.cell(r, 1).value
-        if not isinstance(day, datetime):
-            continue
-        for block in range(6):
-            lo, hi = day + timedelta(hours=block * 4), day + timedelta(hours=(block + 1) * 4)
-            positions = [i for i, stamp in enumerate(stamps) if lo <= stamp < hi]
-            if len(positions) == 24:
-                put(sheet.title, r + block, 3, float(data["charge"][positions].sum()))
-                put(sheet.title, r + block, 4, float(data["discharge"][positions].sum()))
-        for offset in (0, 1):
-            boundary = day + timedelta(days=offset)
-            if boundary in stamp_index:
-                put(sheet.title, r + offset, 6, float(data["soc_before"][stamp_index[boundary]]))
-            elif boundary - timedelta(minutes=10) in stamp_index:
-                put(sheet.title, r + offset, 6, float(data["soc_after"][stamp_index[boundary - timedelta(minutes=10)]]))
-            elif offset == 0 and day.date() == result.dates[0]:
-                put(sheet.title, r, 6, result.config.initial_soc)
-    sheet = original["紧急购电量"]
-    for r in range(2, sheet.max_row + 1):
-        day = sheet.cell(r, 1).value
-        if not isinstance(day, datetime) or day.date() not in by_day:
-            continue
-        i = by_day[day.date()]
-        positive = np.flatnonzero(result.executed[i] & (result.emergency[i] > 1e-7))
-        if len(positive) or result.executed[i].all():
-            labels = [original["计划购电量"].cell(1, int(j) + 2).value for j in positive]
-            text = "\n".join(labels) if labels else "无"
-            if not result.executed[i].all():
-                text = "已执行部分：\n" + text
-            put(sheet.title, r, 2, text)
-            put(sheet.title, r, 3, float(result.emergency[i, result.executed[i]].sum()))
-    mismatches = []
-    for source in original:
-        target = workbook[source.title]
-        require((source.max_row, source.max_column) == (target.max_row, target.max_column), f"workbook dimensions {source.title}")
-        require(list(source.merged_cells.ranges) == list(target.merged_cells.ranges), f"workbook merges {source.title}")
-        for row in source:
-            for cell in row:
-                value = expected.get((source.title, cell.row, cell.column), cell.value)
-                observed = target.cell(cell.row, cell.column)
-                numeric = isinstance(value, (int, float)) and not isinstance(value, bool)
-                valid = (isinstance(observed.value, (int, float)) and abs(value - observed.value) <= tolerance) if numeric else observed.value == value
-                source_style = tuple(cell._style) if cell._style is not None else (0,) * 9
-                target_style = tuple(observed._style) if observed._style is not None else (0,) * 9
-                if not valid or source_style != target_style:
-                    mismatches.append(f"{source.title}!{cell.coordinate}")
-    require(not mismatches, "workbook cell mismatch: " + ", ".join(mismatches[:12]))
+    verify_workbook(result, path, template_path, require, tolerance)
 
 
 def main(argv=None):

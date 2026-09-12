@@ -10,7 +10,7 @@ def render(z):
     price, load, pv = z["price"], z["load_kw"], z["pv_kw"]
     fig, (a, b) = plt.subplots(2, 1, figsize=(12, 7.2), layout="constrained",
                                gridspec_kw={"height_ratios": [1, 1.5]})
-    fig.suptitle("Q1 · 图1  电价与供需的日内结构")
+    fig.suptitle("电价与供需的日内结构")
     a.stairs(price, edges, color=RED, lw=1.5, baseline=None)
     a.set_ylabel("电价 (元/kWh)")
     a.set_ylim(0, price.max() * 1.34)

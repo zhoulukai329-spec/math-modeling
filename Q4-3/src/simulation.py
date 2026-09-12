@@ -197,6 +197,7 @@ class SimulationResult:
     solve_log: list[dict[str, Any]]
     config: SimulationConfig
     elapsed_seconds: float
+    calendar_boundary: dict[str, Any] | None = None
 
     @property
     def total_cost(self) -> float:
@@ -388,6 +389,7 @@ def simulate(config: SimulationConfig, date_start: date | str,
                 reference_by_time[target] = float(max(0.0, value))
             for target, value in zip(targets, charge_reference):
                 charge_reference_by_time[target] = float(max(0.0, value))
+        if kind in {"baseline", "revision"}:
             for target, value in zip(targets, price_point):
                 price_forecast_by_time[target] = float(value)
             for target, value in zip(targets, point):
@@ -432,12 +434,8 @@ def simulate(config: SimulationConfig, date_start: date | str,
                 revised[column:] = solution.commitment[:144 - column]
                 versions.append(ledgers[operating_day].revise(now, revised))
             ix = result_row, column
-            observed["pv_forecast"][ix] = pv_forecast_by_time.get(
-                now, float(data.pv_energy[source_row, column])
-            )
-            observed["price_forecast"][ix] = price_forecast_by_time.get(
-                now, build_causal_price_forecast(data.price, all_times, now, [now])[0]
-            )
+            observed["pv_forecast"][ix] = pv_forecast_by_time[now]
+            observed["price_forecast"][ix] = price_forecast_by_time[now]
             if config.backend == "rolling-milp":
                 solution = solve_at(now, first, config.horizon_steps, "execution")
                 for name in ("charge", "discharge", "emergency", "spill", "mode"):

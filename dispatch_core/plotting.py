@@ -83,7 +83,7 @@ def plot_horizon_sensitivity(records, output_dir, title):
             ax.plot([row["horizon_hours"] for row in rows], [row[key] for row in rows],
                     color=colors[i % len(colors)], marker=markers[i % len(markers)],
                     lw=1.25, ms=4, label=day[5:])
-        ax.set_xlabel("预测前瞻长度（h）")
+        ax.set_xlabel("设定的最小前瞻长度（h）")
         ax.set_ylabel(label)
         ax.set_xticks((12, 18, 24))
         ax.grid(axis="y", color="#D9D9D9", lw=0.55, alpha=0.7)
@@ -166,7 +166,7 @@ def plot_revision_sensitivity(csv_path, output_dir):
                    fontsize=6.8, title_fontsize=7.2)
     axes[0].set_title("配对差值（正值表示改善）", loc="left")
     add_panel_labels(axes)
-    fig.suptitle("Q3 预报修订时刻的费用—应急购电权衡", fontsize=10)
+    fig.suptitle("预报修订时刻的费用—应急购电权衡", fontsize=10)
     layout_issues = audit_layout(fig)
     design_issues = audit_design(fig)
     if layout_issues or design_issues:
@@ -202,7 +202,7 @@ def make_solution_figures(solution_path, output_dir, *, question, dynamic_price=
     qualifier = "（冒烟预览）" if smoke else ""
     t = _time_axis(values["price"].shape[1])
     executed_columns = np.flatnonzero(executed[index])
-    display_end = max(1.0, float(t[executed_columns[-1]])) if smoke and executed_columns.size else 24.0
+    display_end = max(1.0, float(t[executed_columns[-1]] + 1/6)) if smoke and executed_columns.size else 24.0 + 1/6
     paths = []
 
     forecast_rows = 2 if dynamic_price else 1
@@ -216,39 +216,39 @@ def make_solution_figures(solution_path, output_dir, *, question, dynamic_price=
     _style_time(ax, display_end)
     if dynamic_price:
         ax = axes[1, 0]
-        ax.step(t, values["price"][index], where="mid", color=ORANGE, lw=1.45, label="实际电价")
-        ax.step(t, values["price_forecast"][index], where="mid", color=BLUE, lw=1.25,
+        ax.step(t, values["price"][index], where="post", color=ORANGE, lw=1.45, label="实际电价")
+        ax.step(t, values["price_forecast"][index], where="post", color=BLUE, lw=1.25,
                 ls="--", label="当时可用预测")
         ax.set_ylabel("电价（元/kWh）")
         ax.legend(frameon=False, ncol=2)
         _style_time(ax, display_end)
     axes[-1, 0].set_xlabel("左端点时刻（h）")
-    fig.suptitle(f"{question} 预测与实际信息对照：{dates[index]}{qualifier}")
+    fig.suptitle(f"预测与实际信息对照：{dates[index]}{qualifier}")
     paths += _save(fig, output_dir, "fig1_forecast_actual")
 
     fig, axes = plt.subplots(4, 1, figsize=(7.2, 7.5), sharex=True, layout="constrained",
                              gridspec_kw={"height_ratios": [0.8, 1.5, 1.1, 1.0]})
-    axes[0].step(t, values["price"][index], where="mid", color=ORANGE, lw=1.4)
+    axes[0].step(t, values["price"][index], where="post", color=ORANGE, lw=1.4)
     axes[0].set_ylabel("电价\n（元/kWh）")
     net = values["load_energy"][index] - values["pv_energy"][index]
-    axes[1].step(t, values["baseline"][index] * 6, where="mid", color=PALE_BLUE, lw=1.1, label="0点基准")
-    axes[1].step(t, values["final_commitment"][index] * 6, where="mid", color=BLUE, lw=1.5, label="调整后购电")
+    axes[1].step(t, values["baseline"][index] * 6, where="post", color=PALE_BLUE, lw=1.1, label="0点基准")
+    axes[1].step(t, values["final_commitment"][index] * 6, where="post", color=BLUE, lw=1.5, label="调整后购电")
     axes[1].plot(t, net * 6, color=BLACK, lw=1.0, label="实际净负荷")
-    axes[1].bar(t, values["emergency"][index] * 6, width=1/6, color=VERMILION, alpha=.8, label="紧急购电")
+    axes[1].bar(t, values["emergency"][index] * 6, width=1/6, align="edge", color=VERMILION, alpha=.8, label="紧急购电")
     axes[1].set_ylabel("功率（kW）")
     axes[1].legend(frameon=False, ncol=4, fontsize=7)
-    axes[2].fill_between(t, 0, values["charge"][index] * 6, step="mid", color=ORANGE, alpha=.55, label="充电")
-    axes[2].fill_between(t, 0, -values["discharge"][index] * 6, step="mid", color=TEAL, alpha=.55, label="放电")
+    axes[2].fill_between(t, 0, values["charge"][index] * 6, step="post", color=ORANGE, alpha=.55, label="充电")
+    axes[2].fill_between(t, 0, -values["discharge"][index] * 6, step="post", color=TEAL, alpha=.55, label="放电")
     axes[2].set_ylabel("储能功率（kW）")
     axes[2].legend(frameon=False, ncol=2)
-    axes[3].plot(t, values["soc_after"][index] / 1000, color=BLUE, lw=1.6)
+    axes[3].plot(t + 1/6, values["soc_after"][index] / 1000, color=BLUE, lw=1.6)
     axes[3].axhline(1.2, color=BLACK, ls="--", lw=.7)
     axes[3].axhline(10.8, color=BLACK, ls="--", lw=.7)
     axes[3].set_ylabel("SOC（MWh）")
     axes[3].set_xlabel("左端点时刻（h）")
     for ax in axes:
         _style_time(ax, display_end)
-    fig.suptitle(f"{question} 购电承诺与储能执行：{dates[index]}{qualifier}")
+    fig.suptitle(f"购电承诺与储能执行：{dates[index]}{qualifier}")
     paths += _save(fig, output_dir, "fig2_commitment_dispatch")
 
     daily_base = np.nansum(values["price"] * values["baseline"], axis=1)
@@ -285,18 +285,19 @@ def make_solution_figures(solution_path, output_dir, *, question, dynamic_price=
     axes[1].set_xlabel("结果内日期序号")
     for ax in axes:
         ax.grid(axis="y", color="#D9D9D9", lw=.55, alpha=.7)
-    fig.suptitle(f"{question} 日费用与紧急购电风险{qualifier}")
+    fig.suptitle(f"日费用与紧急购电风险{qualifier}")
     paths += _save(fig, output_dir, "fig3_cost_emergency")
 
     cmap = LinearSegmentedColormap.from_list("emergency", [WHITE, PALE_RED, ORANGE, VERMILION, "#B2182B"])
-    matrix = np.nan_to_num(values["emergency"], nan=0.0)
-    vmax = max(float(matrix.max()), 1e-12)
+    matrix = np.ma.masked_invalid(values["emergency"])
+    cmap.set_bad("#D9D9D9")
+    vmax = max(float(matrix.max()) if matrix.count() else 0.0, 1e-12)
     fig, ax = plt.subplots(figsize=(7.2, 4.0), layout="constrained")
-    mesh = ax.pcolormesh(np.arange(145) / 6, np.arange(len(dates) + 1), matrix,
+    mesh = ax.pcolormesh(np.arange(1, 146) / 6, np.arange(len(dates) + 1), matrix,
                          cmap=cmap, norm=PowerNorm(gamma=.55, vmin=0, vmax=vmax), shading="flat")
     ax.set_xlabel("左端点时刻（h）")
     ax.set_ylabel("结果内日期序号")
-    ax.set_title(f"{question} 紧急购电日期—时段热力图{qualifier}")
+    ax.set_title(f"紧急购电日期—时段热力图{qualifier}")
     colorbar = fig.colorbar(mesh, ax=ax, pad=.02)
     colorbar.set_label("紧急购电量（kWh/10 min）")
     paths += _save(fig, output_dir, "fig4_emergency_heatmap")
@@ -314,10 +315,10 @@ def make_solution_figures(solution_path, output_dir, *, question, dynamic_price=
     axes[1].set_ylabel("求解时间（s）")
     for ax in axes:
         ax.grid(axis="y", color="#D9D9D9", lw=.55, alpha=.7)
-    fig.suptitle(f"{question} 计算性能诊断{qualifier}")
+    fig.suptitle(f"计算性能诊断{qualifier}")
     paths += _save(fig, output_dir, "fig5_solver_performance")
 
     if sensitivity_csv is not None:
         paths += plot_horizon_sensitivity(load_sensitivity_csv(sensitivity_csv), output_dir,
-                                          f"{question} 12/18/24小时前瞻敏感性")
+                                          "最小前瞻长度敏感性（仍覆盖当日剩余时段）")
     return paths

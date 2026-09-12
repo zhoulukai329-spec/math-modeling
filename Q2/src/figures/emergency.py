@@ -14,7 +14,7 @@ def render(z):
     hours = np.arange(e.shape[1] + 1) / 6
     fig, (a, b) = plt.subplots(2, 1, figsize=(12, 8.5), layout="constrained",
                                gridspec_kw={"height_ratios": [3, 1]})
-    fig.suptitle("Q2 · 图3  紧急购电的日期与时段分布")
+    fig.suptitle("紧急购电的日期与时段分布")
     cmap = LinearSegmentedColormap.from_list("emergency", ["#FFFFFF", "#FBE9C3", ORANGE, RED, "#682600"])
     image = a.pcolormesh(hours, day_edges, e, shading="flat", cmap=cmap,
                         norm=PowerNorm(gamma=0.5, vmin=0, vmax=float(e.max())), rasterized=True)

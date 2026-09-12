@@ -39,7 +39,7 @@ def main(argv=None):
                 "n_scenarios": args.scenarios})
             print(f"Q4-3 {day} H={hours}h complete", flush=True)
     csv_path, json_path = write_records(records, args.output_dir)
-    plot_horizon_sensitivity(records, args.output_dir, "Q4-3 12/18/24小时前瞻敏感性")
+    plot_horizon_sensitivity(records, args.output_dir, "最小前瞻长度敏感性（仍覆盖当日剩余时段）")
     print(f"saved: {csv_path}\n{json_path}")
     return 0
 

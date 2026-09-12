@@ -7,7 +7,7 @@ from plot_support import GREEN, BLUE, RED, BLACK, style, legend, note
 def render(z):
     t = z["t_min"] / 60 + 1 / 12
     fig, (a, b) = plt.subplots(2, 1, figsize=(12, 7.2), layout="constrained")
-    fig.suptitle("Q1 · 图3  逐 10 分钟购电与储能动作")
+    fig.suptitle("逐 10 分钟购电与储能动作")
     a.bar(t, z["x"] * 6, width=0.14, color=GREEN, label="计划购电")
     a.set_ylabel("购电功率 (kW)")
     a.set_ylim(0, z["x"].max() * 6 * 1.23)
