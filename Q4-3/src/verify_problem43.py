@@ -10,7 +10,7 @@ import numpy as np
 from openpyxl import load_workbook
 
 
-def verify_solution(result, *, workbook_path=None, template_path=None, tolerance=1e-6):
+def verify_solution43(result, *, workbook_path=None, template_path=None, tolerance=1e-6):
     errors = []
     residuals = {}
 
@@ -27,7 +27,7 @@ def verify_solution(result, *, workbook_path=None, template_path=None, tolerance
 
     shape = (len(result.dates), 144)
     for name in ("timestamps", "executed", "baseline", "final_commitment", "load_energy", "pv_energy", "pv_forecast",
-                 "price", "charge", "discharge", "emergency", "spill", "mode", "charge_reference", "discharge_reference",
+                 "price", "price_forecast", "charge", "discharge", "emergency", "spill", "mode", "charge_reference", "discharge_reference",
                  "soc_before", "soc_after"):
         require(np.shape(getattr(result, name)) == shape, f"{name} shape")
     if errors:
@@ -179,7 +179,7 @@ def verify_solution(result, *, workbook_path=None, template_path=None, tolerance
 def _verify_workbook(result, path, template_path, require, tolerance):
     """Reconstruct expected cells independently of the writer, including blanks."""
     if template_path is None:
-        template_path = Path(__file__).resolve().parents[2] / "attachment/附件5/result3.xlsx"
+        template_path = Path(__file__).resolve().parents[2] / "attachment/附件5/result4-3.xlsx"
     original, workbook = load_workbook(template_path), load_workbook(path)
     require(workbook.sheetnames == original.sheetnames, "workbook sheets")
     if workbook.sheetnames != original.sheetnames:
@@ -263,7 +263,7 @@ def main(argv=None):
     parser.add_argument("--report", type=Path)
     args = parser.parse_args(argv)
     from make_results import load_result
-    report = verify_solution(load_result(args.solution), workbook_path=args.workbook, template_path=args.template)
+    report = verify_solution43(load_result(args.solution), workbook_path=args.workbook, template_path=args.template)
     text = json.dumps(report, indent=2, ensure_ascii=False, allow_nan=False)
     if args.report:
         args.report.parent.mkdir(parents=True, exist_ok=True)

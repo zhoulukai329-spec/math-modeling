@@ -14,13 +14,13 @@ from data_io import ATTACHMENT_DIR, coerce_date
 from simulation import CommitmentVersion, SimulationConfig, SimulationResult
 
 ARRAY_FIELDS = ("executed", "baseline", "final_commitment", "load_energy", "pv_energy",
-                "pv_forecast", "price", "charge", "discharge", "emergency", "spill", "mode",
+                "pv_forecast", "price", "price_forecast", "charge", "discharge", "emergency", "spill", "mode",
                 "charge_reference", "discharge_reference", "soc_before", "soc_after")
-DEFAULT_TEMPLATE = ATTACHMENT_DIR / "附件5" / "result3.xlsx"
+DEFAULT_TEMPLATE = ATTACHMENT_DIR / "附件5" / "result4-3.xlsx"
 
 
 def trim_result(result: SimulationResult, date_start) -> SimulationResult:
-    """Remove warm-up rows and recompute the exact reported cash scope."""
+    """Remove January warm-up rows and recompute February--December cash."""
     start = coerce_date(date_start)
     keep = np.asarray([day >= start for day in result.dates], dtype=bool)
     if not keep.any():
@@ -30,20 +30,16 @@ def trim_result(result: SimulationResult, date_start) -> SimulationResult:
     timestamps = result.timestamps[keep].copy()
     versions = tuple(v for v in result.versions if v.target_times[0].date() in set(dates))
     mask = arrays["executed"]
-    costs = {
-        "baseline": float(sum(v.baseline_cost for v in versions)),
-        "revision_up": float(sum(v.up_cost for v in versions)),
-        "revision_down": float(sum(v.down_cost for v in versions)),
-        "emergency": float(np.sum(5 * arrays["price"][mask] * arrays["emergency"][mask])),
-    }
+    costs = {"baseline": float(sum(v.baseline_cost for v in versions)),
+             "revision_up": float(sum(v.up_cost for v in versions)),
+             "revision_down": float(sum(v.down_cost for v in versions)),
+             "emergency": float(np.sum(5 * arrays["price"][mask] * arrays["emergency"][mask]))}
     actual_times = set(timestamps[mask])
     issue_keys = {(v.issued_at, v.kind) for v in versions}
-    solve_log = []
-    for entry in result.solve_log:
-        now = datetime.fromisoformat(entry["timestamp"])
-        if ((entry["kind"] == "execution" and now in actual_times)
-                or (entry["kind"] != "execution" and (now, entry["kind"]) in issue_keys)):
-            solve_log.append(dict(entry))
+    solve_log = [dict(entry) for entry in result.solve_log
+                 if ((entry["kind"] == "execution" and datetime.fromisoformat(entry["timestamp"]) in actual_times)
+                     or (entry["kind"] != "execution" and
+                         (datetime.fromisoformat(entry["timestamp"]), entry["kind"]) in issue_keys))]
     for entry in solve_log:
         if (entry["kind"] == "baseline"
                 and datetime.fromisoformat(entry["timestamp"]) == datetime.combine(dates[0], time())):
@@ -66,7 +62,7 @@ def _configuration(config):
     return {f.name: getattr(config, f.name) for f in fields(config) if f.name != "data"}
 
 
-def write_result3(result: SimulationResult, output_path: str | Path,
+def write_result43(result: SimulationResult, output_path: str | Path,
                   template_path: str | Path = DEFAULT_TEMPLATE) -> Path:
     """Fill only template anchors. Unknown physical values stay blank.
 
@@ -142,13 +138,13 @@ def write_result3(result: SimulationResult, output_path: str | Path,
     return output_path
 
 
-def save_result(result: SimulationResult, output_dir: str | Path, *, prefix: str = "smoke",
+def save_result43(result: SimulationResult, output_dir: str | Path, *, prefix: str = "smoke",
                 template_path: str | Path = DEFAULT_TEMPLATE) -> dict[str, Path]:
     """NPZ contains no pickle objects; JSON metadata is embedded for reconstruction."""
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     paths = dict(solution=output_dir / f"{prefix}_solution.npz", metrics=output_dir / f"{prefix}_metrics.json",
-                 trajectory=output_dir / f"{prefix}_trajectory.csv", workbook=output_dir / "result3.xlsx")
+                 trajectory=output_dir / f"{prefix}_trajectory.csv", workbook=output_dir / "result4-3.xlsx")
     metadata = dict(schema_version=1, dates=[str(d) for d in result.dates], costs=result.costs,
                     config=_configuration(result.config), solve_log=result.solve_log,
                     elapsed_seconds=result.elapsed_seconds,
@@ -178,7 +174,7 @@ def save_result(result: SimulationResult, output_dir: str | Path, *, prefix: str
                 values = [getattr(result, name)[i, j] for name in ARRAY_FIELDS]
                 csv_writer.writerow([str(day), result.timestamps[i, j].isoformat(),
                                      *["" if isinstance(v, (float, np.floating)) and np.isnan(v) else v for v in values]])
-    write_result3(result, paths["workbook"], template_path)
+    write_result43(result, paths["workbook"], template_path)
     return paths
 
 
@@ -203,10 +199,6 @@ def load_result(path: str | Path) -> SimulationResult:
         restored = {name: saved[name].copy() for name in ARRAY_FIELDS if name in saved.files}
         if "discharge_reference" not in restored:
             restored["discharge_reference"] = restored["discharge"].copy()
-        if "charge_reference" not in restored:
-            restored["charge_reference"] = restored["charge"].copy()
-        if "pv_forecast" not in restored:
-            restored["pv_forecast"] = restored["pv_energy"].copy()
         return SimulationResult(dates=tuple(date.fromisoformat(d) for d in metadata["dates"]),
             timestamps=np.asarray([[datetime.fromisoformat(t) for t in row] for row in saved["timestamps"]], dtype=object),
             versions=tuple(versions), config=SimulationConfig(**config), costs=metadata["costs"],

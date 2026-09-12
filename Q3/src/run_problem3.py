@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 
 from data_io import ATTACHMENT_DIR
-from make_results import save_result
+from make_results import save_result, trim_result
 from simulation import SimulationConfig, simulate
 from verify_problem3 import verify_solution
 
@@ -82,6 +82,8 @@ def main(argv=None):
     end = args.date_end or (args.date_start if args.mode == "smoke" else "2025-12-31")
     sim_start = "2025-01-01" if args.mode == "full" else args.date_start
     result = simulate(config, sim_start, end)
+    if args.mode == "full":
+        result = trim_result(result, args.date_start)
     report = verify_solution(result)
     if not report["passed"]:
         raise RuntimeError(f"simulation failed independent verification: {report['errors']}")

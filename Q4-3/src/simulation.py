@@ -17,11 +17,15 @@ from typing import Any, Sequence
 
 import numpy as np
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+Q3_SRC = REPO_ROOT / "Q3" / "src"
+if str(Q3_SRC) not in sys.path:
+    sys.path.append(str(Q3_SRC))
 from data_io import InputData, coerce_date, load_inputs, source_datetimes
 from forecast import build_information_forecast, build_pv_scenarios
 from model import MPCProblem, MPCSolution, solve_mpc
+from price_forecast import build_causal_price_forecast, build_price_scenarios
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 from dispatch_core import BatteryLimits, dispatch_step, deduplicate_scenarios
@@ -177,6 +181,7 @@ class SimulationResult:
     pv_energy: np.ndarray
     pv_forecast: np.ndarray
     price: np.ndarray
+    price_forecast: np.ndarray
     charge: np.ndarray
     discharge: np.ndarray
     emergency: np.ndarray
@@ -277,7 +282,7 @@ def simulate(config: SimulationConfig, date_start: date | str,
     time_index = {timestamp: i for i, timestamp in enumerate(flat_times)}
     shape = (len(dates), 144)
     observed = {name: np.full(shape, np.nan) for name in
-                ("load_energy", "pv_energy", "pv_forecast", "charge", "discharge", "emergency", "spill", "mode",
+                ("load_energy", "pv_energy", "pv_forecast", "price_forecast", "charge", "discharge", "emergency", "spill", "mode",
                  "charge_reference", "discharge_reference",
                  "soc_before", "soc_after")}
     executed = np.zeros(shape, dtype=bool)
@@ -290,6 +295,7 @@ def simulate(config: SimulationConfig, date_start: date | str,
     reference_by_time: dict[datetime, float] = {}
     charge_reference_by_time: dict[datetime, float] = {}
     pv_forecast_by_time: dict[datetime, float] = {}
+    price_forecast_by_time: dict[datetime, float] = {}
     soc = config.initial_soc
     limits = BatteryLimits(config.soc_min, config.soc_max, config.charge_limit,
                            config.discharge_limit, config.charge_efficiency,
@@ -319,19 +325,32 @@ def simulate(config: SimulationConfig, date_start: date | str,
         historical = residuals.reveal_before(now)
         if deterministic:
             pv = point[None, :]
+            source_days = np.full(k, -1, dtype=int)
         else:
             issue_index = int(np.searchsorted(np.asarray(data.dates, dtype=object), now.date()))
-            pv = build_pv_scenarios(point, historical, issue_day_index=issue_index,
+            pv, source_days = build_pv_scenarios(point, historical, issue_day_index=issue_index,
                                    start_step=first % 144, horizon_steps=length, n_scenarios=k,
                                    lookback_days=config.lookback_days, seed=config.seed,
-                                   operating_dates=data.dates, issue_time=now)
+                                   operating_dates=data.dates, issue_time=now, return_source_days=True)
+        price_point = build_causal_price_forecast(data.price, all_times, now, targets)
+        price_scenarios = build_price_scenarios(
+            price_point, data.price, all_times, targets, now, source_days
+        )
         requested_k = k
-        pv, probabilities, _ = deduplicate_scenarios(pv)
-        effective_k = len(pv)
+        joint, probabilities, inverse = deduplicate_scenarios(
+            np.concatenate([pv, price_scenarios], axis=1)
+        )
+        pv, price_scenarios = joint[:, :length], joint[:, length:]
+        source_days = np.asarray([
+            source_days[int(np.flatnonzero(inverse == i)[0])] for i in range(len(joint))
+        ], dtype=int)
+        effective_k = len(joint)
         current_observed = targets[0] == now
         if current_observed:
             load[0] = data.load_energy.flat[first]
             pv[:, 0] = data.pv_energy.flat[first]
+            price_point[0] = data.price.flat[first]
+            price_scenarios[:, 0] = data.price.flat[first]
         else:
             # Initial baseline begins at 00:10, which is future at 00:00.
             # The current-action equality uses a common point, not its actual.
@@ -347,13 +366,16 @@ def simulate(config: SimulationConfig, date_start: date | str,
                 baseline_mask[step] = False
                 if day != mutable_day or kind != "revision":
                     fixed[step] = previous[step]
-        problem = MPCProblem(load, pv, data.price.ravel()[first:first + length], soc,
+        expected_price = probabilities @ price_scenarios
+        problem = MPCProblem(load, pv, expected_price, soc, scenario_price=price_scenarios,
                              scenario_probabilities=probabilities,
                              previous_commitment=previous, fixed_commitment=fixed,
                              baseline_mask=baseline_mask, **config.model_parameters())
         solution = solve_mpc(problem)
         entry = dict(solution.diagnostics, timestamp=now.isoformat(), kind=kind,
                      backend=config.backend,
+                     price_information="causal-forecast",
+                     scenario_source_days=source_days.tolist(),
                      scenario_count=requested_k, effective_scenario_count=effective_k,
                      duplicate_scenarios_removed=requested_k - effective_k,
                      horizon_steps=length, status=solution.status,
@@ -370,6 +392,8 @@ def simulate(config: SimulationConfig, date_start: date | str,
                 reference_by_time[target] = float(max(0.0, value))
             for target, value in zip(targets, charge_reference):
                 charge_reference_by_time[target] = float(max(0.0, value))
+            for target, value in zip(targets, price_point):
+                price_forecast_by_time[target] = float(value)
             for target, value in zip(targets, point):
                 pv_forecast_by_time[target] = float(value)
         if kind == "execution":
@@ -414,6 +438,9 @@ def simulate(config: SimulationConfig, date_start: date | str,
             ix = result_row, column
             observed["pv_forecast"][ix] = pv_forecast_by_time.get(
                 now, float(data.pv_energy[source_row, column])
+            )
+            observed["price_forecast"][ix] = price_forecast_by_time.get(
+                now, build_causal_price_forecast(data.price, all_times, now, [now])[0]
             )
             if config.backend == "rolling-milp":
                 solution = solve_at(now, first, config.horizon_steps, "execution")

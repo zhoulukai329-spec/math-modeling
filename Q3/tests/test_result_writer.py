@@ -89,6 +89,15 @@ def test_npz_roundtrip_and_csv_retain_versions_and_unknowns(writer, verifier, re
     assert verifier.verify_solution(restored, workbook_path=paths["workbook"])["passed"]
 
 
+def test_trim_result_removes_warmup_rows_and_recomputes_reported_costs(writer, verifier, result):
+    trimmed = writer.trim_result(result, result.dates[1])
+    assert trimmed.dates == (result.dates[1],)
+    assert trimmed.executed.shape == (1, 144)
+    assert all(version.target_times[0].date() == result.dates[1] for version in trimmed.versions)
+    report = verifier.verify_solution(trimmed)
+    assert report["passed"], report["errors"]
+
+
 def test_load_result_accepts_utf8_bom_wrapped_npz(writer, result, tmp_path):
     paths = writer.save_result(result, tmp_path, prefix="bom")
     wrapped = tmp_path / "bom_wrapped.npz"

@@ -1,0 +1,21 @@
+[
+  {
+    "question": "Q4-3",
+    "date": "2025-08-01",
+    "horizon_hours": 12,
+    "rolling_cost": 26047.09818979643,
+    "event_cost": 26368.087965819075,
+    "cost_difference": 320.98977602264495,
+    "rolling_emergency_kwh": 0.0,
+    "event_emergency_kwh": 149.12611194968486,
+    "emergency_difference_kwh": 149.12611194968486,
+    "rolling_end_soc_kwh": 5001.712129221988,
+    "event_end_soc_kwh": 5439.990140803634,
+    "end_soc_difference_kwh": 438.27801158164584,
+    "rolling_solve_seconds": 1.409413400106132,
+    "event_solve_seconds": 0.1815980999963358,
+    "speedup": 7.761168206796054,
+    "rolling_max_residual": 2.2737367544323206e-13,
+    "event_max_residual": 0.0
+  }
+]

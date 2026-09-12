@@ -62,6 +62,7 @@ def dispatch_step(
     pv_energy: float,
     commitment: float,
     soc: float,
+    charge_reference: float | None = None,
     discharge_reference: float,
     limits: BatteryLimits,
 ) -> DispatchStep:
@@ -72,21 +73,25 @@ def dispatch_step(
     the remainder.  Consequently the optimizer may intentionally retain SOC.
     """
     raw = (load_energy, pv_energy, commitment, soc, discharge_reference)
+    if charge_reference is not None:
+        raw += (charge_reference,)
     if not all(math.isfinite(float(value)) for value in raw):
         raise ValueError("dispatch inputs must be finite")
-    if min(load_energy, pv_energy, commitment, discharge_reference) < -limits.tolerance:
+    if min(load_energy, pv_energy, commitment, discharge_reference,
+           0.0 if charge_reference is None else charge_reference) < -limits.tolerance:
         raise ValueError("energy flows and references must be nonnegative")
     load_energy = max(0.0, float(load_energy))
     pv_energy = max(0.0, float(pv_energy))
     commitment = max(0.0, float(commitment))
     discharge_reference = max(0.0, float(discharge_reference))
+    charge_cap = float("inf") if charge_reference is None else max(0.0, float(charge_reference))
     soc_before = _clip_boundary(float(soc), limits.soc_min, limits.soc_max, limits.tolerance)
 
     surplus = commitment + pv_energy - load_energy
     charge = discharge = emergency = spill = 0.0
     if surplus >= 0:
         capacity_input = (limits.soc_max - soc_before) / limits.charge_efficiency
-        charge = min(surplus, limits.charge_limit, max(0.0, capacity_input))
+        charge = min(surplus, charge_cap, limits.charge_limit, max(0.0, capacity_input))
         spill = surplus - charge
         mode = 1 if charge > limits.tolerance else 0
     else:
@@ -104,4 +109,3 @@ def dispatch_step(
         raise ValueError(f"energy balance residual {residual} exceeds tolerance")
     return DispatchStep(float(charge), float(discharge), float(emergency), float(spill), mode,
                         soc_before, soc_after, float(residual))
-

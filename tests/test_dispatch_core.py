@@ -31,6 +31,15 @@ def test_surplus_charges_before_spilling_and_respects_soc_ceiling():
     assert step.discharge == step.emergency == 0.0
 
 
+def test_charge_reference_preserves_capacity_when_latest_milp_plans_to_spill():
+    step = dispatch_step(
+        load_energy=100.0, pv_energy=200.0, commitment=300.0, soc=6000.0,
+        charge_reference=40.0, discharge_reference=0.0, limits=LIMITS,
+    )
+    assert step.charge == pytest.approx(40.0)
+    assert step.spill == pytest.approx(360.0)
+
+
 def test_deficit_uses_only_reference_discharge_and_emergency_covers_rest():
     step = dispatch_step(
         load_energy=900.0,
@@ -92,4 +101,3 @@ def test_duplicate_scenarios_merge_probabilities_in_first_seen_order():
 def test_scenario_probabilities_are_validated():
     with pytest.raises(ValueError, match="probabilities"):
         deduplicate_scenarios(np.ones((2, 3)), [0.2, 0.2])
-

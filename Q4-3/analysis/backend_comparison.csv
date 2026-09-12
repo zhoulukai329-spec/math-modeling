@@ -1,0 +1,2 @@
+﻿question,date,horizon_hours,rolling_cost,event_cost,cost_difference,rolling_emergency_kwh,event_emergency_kwh,emergency_difference_kwh,rolling_end_soc_kwh,event_end_soc_kwh,end_soc_difference_kwh,rolling_solve_seconds,event_solve_seconds,speedup,rolling_max_residual,event_max_residual
+Q4-3,2025-08-01,12,26047.09818979643,26368.087965819075,320.98977602264495,0.0,149.12611194968486,149.12611194968486,5001.712129221988,5439.990140803634,438.27801158164584,1.409413400106132,0.1815980999963358,7.761168206796054,2.2737367544323206e-13,0.0

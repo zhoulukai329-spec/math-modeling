@@ -36,6 +36,7 @@ class MPCProblem:
     pv_energy: np.ndarray
     price: np.ndarray
     initial_soc: float
+    scenario_price: np.ndarray | None = None
     previous_commitment: np.ndarray | None = None
     fixed_commitment: np.ndarray | None = None
     scenario_probabilities: np.ndarray | None = None
@@ -73,6 +74,13 @@ class MPCProblem:
             if np.any(value < 0):
                 raise ValueError(f"{name} must be nonnegative")
             object.__setattr__(self, name, value)
+        scenario_price = (np.repeat(price[None, :], pv.shape[0], axis=0)
+                          if self.scenario_price is None
+                          else np.asarray(self.scenario_price, dtype=float))
+        if (scenario_price.shape != pv.shape or not np.isfinite(scenario_price).all()
+                or np.any(scenario_price < 0)):
+            raise ValueError("scenario_price must be finite/nonnegative with shape (K,T)")
+        object.__setattr__(self, "scenario_price", scenario_price.copy())
         if not np.allclose(pv[:, 0], pv[0, 0], atol=1e-9, rtol=0):
             raise ValueError("current pv_energy must agree across scenarios; supply the common observation")
         probabilities = (np.full(pv.shape[0], 1.0 / pv.shape[0])
@@ -222,7 +230,7 @@ def solve_mpc(problem: MPCProblem) -> MPCSolution:
         procurement_objective[down] = 0.5 * p.price * ~baseline_mask
     procurement_objective[q[baseline_mask]] = p.price[baseline_mask]
     objective += procurement_objective
-    objective[e] = probability[:, None] * 5.0 * p.price
+    objective[e] = probability[:, None] * 5.0 * p.scenario_price
     objective[c] = probability[:, None] * p.throughput_penalty
     objective[d] = probability[:, None] * p.throughput_penalty
     objective[deviation] = probability * p.terminal_penalty
@@ -271,19 +279,22 @@ def solve_mpc(problem: MPCProblem) -> MPCSolution:
         procurement_terms = [(index, procurement_objective[index])
                              for index in np.flatnonzero(procurement_objective)]
         for scenario in range(k):
-            row(procurement_terms + [(e[scenario, step], 5.0 * p.price[step]) for step in range(t)]
+            row(procurement_terms + [(e[scenario, step], 5.0 * p.scenario_price[scenario, step]) for step in range(t)]
                 + [(eta, -1), (excess[scenario], -1)], -np.inf, 0)
 
     matrix = coo_matrix((coefficients, (rows, columns)), shape=(len(row_lb), size)).tocsc()
     constraint_lower, constraint_upper = np.asarray(row_lb), np.asarray(row_ub)
+    model_build_seconds = perf_counter() - started
     # HiGHS' default 1e-6 integer tolerance can admit 8e-4 kWh through
     # the 833 kWh mode bounds. Tighten it instead of weakening the audit.
+    solver_started = perf_counter()
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", message="Unrecognized options detected:.*", category=RuntimeWarning)
         result = milp(c=objective, integrality=integrality, bounds=Bounds(lb, ub),
                       constraints=LinearConstraint(matrix, constraint_lower, constraint_upper),
                       options={"time_limit": p.time_limit, "mip_rel_gap": p.mip_rel_gap,
                                "presolve": True, "mip_feasibility_tolerance": 1e-9})
+    solver_seconds = perf_counter() - solver_started
     solver_status = int(result.status)
     message = str(result.message)
     status = {0: "optimal", 1: "limit_reached", 2: "infeasible", 3: "unbounded", 4: "solver_error"}.get(
@@ -292,6 +303,7 @@ def solve_mpc(problem: MPCProblem) -> MPCSolution:
         "solver_status": solver_status, "message": message,
         "timed_out": solver_status == 1 and "time" in message.lower(),
         "limit_reached": solver_status == 1, "elapsed_seconds": perf_counter() - started,
+        "model_build_seconds": model_build_seconds, "solver_seconds": solver_seconds,
         "n_variables": size, "n_binary": int(integrality.sum()), "n_constraints": len(row_lb),
         "matrix_nnz": int(matrix.nnz), "matrix_format": matrix.format,
         "emergency_upper_max": float(emergency_upper.max()),
@@ -334,7 +346,7 @@ def solve_mpc(problem: MPCProblem) -> MPCSolution:
     solution.revision_down[baseline_mask] = 0.0
     solution.procurement_cost = float(p.price @ (1.5 * solution.revision_up + 0.5 * solution.revision_down
                                                 + baseline_mask * solution.commitment))
-    solution.scenario_cost = solution.procurement_cost + np.sum(solution.emergency * (5.0 * p.price), axis=1)
+    solution.scenario_cost = solution.procurement_cost + np.sum(solution.emergency * (5.0 * p.scenario_price), axis=1)
     solution.expected_cost = float(probability @ solution.scenario_cost)
     solution.terminal_cost = float(p.terminal_penalty * (probability @ np.abs(solution.soc[:, -1] - p.terminal_soc)))
     solution.throughput_cost = float(p.throughput_penalty * np.sum(probability[:, None] * (solution.charge + solution.discharge)))
