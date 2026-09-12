@@ -49,6 +49,17 @@ class DispatchPolicyTests(unittest.TestCase):
         np.testing.assert_array_equal(load_hat[0], np.zeros(dio.N))
         np.testing.assert_array_equal(pv_hat[0], np.zeros(dio.N))
 
+    def test_first_day_forecast_accepts_explicit_non_attachment_prior(self):
+        load = np.full((2, dio.N), 10.0)
+        pv = np.full((2, dio.N), 3.0)
+        load_prior = np.full(dio.N, 5.0)
+        pv_prior = np.zeros(dio.N)
+        _f, _r, load_hat, pv_hat, _lr, _pr = fc.build_causal_forecasts(
+            load, pv, first_day_load=load_prior, first_day_pv=pv_prior
+        )
+        np.testing.assert_array_equal(load_hat[0], load_prior)
+        np.testing.assert_array_equal(pv_hat[0], pv_prior)
+
     def test_reference_policy_may_preserve_battery_and_buy_current_emergency(self):
         net = np.zeros(dio.N)
         plan = np.zeros(dio.N)

@@ -21,6 +21,22 @@ python Q2/src/emergency_table.py
 python -m unittest discover -s Q2/tests -v
 ```
 
+首日预测初始化敏感性分析单独运行：
+
+```powershell
+# 最小检查：两个方案各跑前两天
+python Q2/src/forecast_initialization_sensitivity.py --mode smoke --scenarios 1
+
+# 跑到2月1日：重点看第一月是否消除了首日差异
+python Q2/src/forecast_initialization_sensitivity.py --mode feb-boundary
+
+# 两个方案各跑全年：比较正式输出期全部费用和应急电量
+python Q2/src/forecast_initialization_sensitivity.py --mode full
+```
+
+结果位于 `Q2/output/forecast_initialization_<mode>/`。先看 `summary.csv` 中的
+2月1日初始SOC和正式期总费用，再看 `daily_comparison.csv` 中SOC差异何时收敛。
+
 `fill_reports.py` 按章节回填两份报告的数值表；须在以上求解与分析完成后运行。
 `emergency_table.py` 生成四个指定日期并排的紧急购电表，依赖 `numpy`、
 `matplotlib` 和 `openpyxl`。连续紧急购电时段合并，购电量采用 kWh。
@@ -35,6 +51,7 @@ python -m unittest discover -s Q2/tests -v
 - `output/prob2_solution.npz`：完整逐日逐时段解
 - `output/forecast_rolling_metrics.csv`：因果预测滚动检验误差对比
 - `output/imputation_sensitivity.csv`：1 月 1 日 0:00 插补敏感性检验
+- `output/forecast_initialization_<mode>/`：零先验与首时刻负载持续法的预测初始化对比
 - `output/monte_carlo_results.csv`：历史残差块蒙特卡洛结果
 - `output/robustness_scenario_seed.csv`：场景数 × 随机种子稳健性
 - `output/baselines.csv`：同一信息集基准对照（无储能因果 / 确定性点预测 / 随机策略）

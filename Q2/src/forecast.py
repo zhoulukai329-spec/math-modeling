@@ -13,7 +13,7 @@
 import numpy as np
 
 
-def build_causal_forecasts(load, pv):
+def build_causal_forecasts(load, pv, first_day_load=None, first_day_pv=None):
     """分别生成 0..D-1 每日的因果负载/光伏点预测与残差，再合成净负荷。
 
     参数:
@@ -28,12 +28,20 @@ def build_causal_forecasts(load, pv):
       pv_resid:   (D,144) 光伏残差 = 实际光伏 - 光伏点预测
     """
     D = load.shape[0]
+    if first_day_load is None:
+        first_day_load = np.zeros(load.shape[1])
+    if first_day_pv is None:
+        first_day_pv = np.zeros(pv.shape[1])
+    first_day_load = np.asarray(first_day_load, dtype=float)
+    first_day_pv = np.asarray(first_day_pv, dtype=float)
+    if first_day_load.shape != (load.shape[1],) or first_day_pv.shape != (pv.shape[1],):
+        raise ValueError("首日负载和光伏先验必须各有144个时段")
     load_hat = np.zeros_like(load)
     pv_hat = np.zeros_like(pv)
     for d in range(D):
         if d == 0:
-            load_hat[d] = 0.0
-            pv_hat[d] = 0.0
+            load_hat[d] = first_day_load
+            pv_hat[d] = first_day_pv
         elif d < 7:
             load_hat[d] = load[:d].mean(axis=0)
             pv_hat[d] = pv[:d].mean(axis=0)
