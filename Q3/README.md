@@ -136,7 +136,7 @@ incumbent 经过舍入后仍满足全部约束，就允许执行并记录 `optim
 `calibration.py` 只在 2025 年 1 月运行确定性暖机，分别试验
 `terminal_penalty = 0, 0.1, 0.5`，用“现金费用减去按最低电价折算的期末 SOC 残值”选取
 参数，并保存每次运行的 NPZ、独立校验和 SHA-256。当前仓库冻结文件
-`Q3/output/calibration/frozen_calibration.json` 选出的值为
+稳定的只读运行配置 `Q3/config/frozen_calibration.json` 记录的冻结值为
 `terminal_penalty=0.5`、`terminal_soc=6000`、`cvar_weight=0`、`cvar_alpha=0.9`；这
 是有限试验得到的设计配置，不是对所有超参数的统计最优证明。
 
@@ -221,7 +221,7 @@ Windows 如系统旧 `pytest-of-*` 临时目录权限异常，可指定一个尚
 ## 全年与实验接口
 
 ```powershell
-python Q3/src/run_problem3.py --mode full --calibration Q3/output/calibration/frozen_calibration.json --date-start 2025-02-01 --date-end 2025-12-31
+python Q3/src/run_problem3.py --mode full --calibration Q3/config/frozen_calibration.json --date-start 2025-02-01 --date-end 2025-12-31
 python Q3/src/run_problem3.py --mode experiments --output-dir Q3/analysis
 ```
 
