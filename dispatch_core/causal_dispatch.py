@@ -93,7 +93,9 @@ def dispatch_step(
         capacity_input = (limits.soc_max - soc_before) / limits.charge_efficiency
         charge = min(surplus, charge_cap, limits.charge_limit, max(0.0, capacity_input))
         spill = surplus - charge
-        mode = 1 if charge > limits.tolerance else 0
+        # ``mode`` is a semantic binary indicator, not a material-flow filter:
+        # even a tiny positive charge must be represented by the charge mode.
+        mode = 1 if charge > 0.0 else 0
     else:
         deficit = -surplus
         available_output = (soc_before - limits.soc_min) * limits.discharge_efficiency

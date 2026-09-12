@@ -13,6 +13,9 @@ sys.path.insert(0, str(SRC))
 
 
 def modules():
+    if str(SRC) in sys.path:
+        sys.path.remove(str(SRC))
+    sys.path.insert(0, str(SRC))
     for name in ("data_io", "forecast", "simulation", "price_forecast"):
         sys.modules.pop(name, None)
     dio = importlib.import_module("data_io")
@@ -71,4 +74,3 @@ def test_q43_reference_backend_remains_selectable():
     result = sim.simulate(config(sim, data, backend="rolling-milp", max_steps=2), data.dates[2], data.dates[2])
     assert [row["kind"] for row in result.solve_log] == ["baseline", "execution", "execution"]
     assert all(row["backend"] == "rolling-milp" for row in result.solve_log)
-

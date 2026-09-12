@@ -12,6 +12,9 @@ sys.path.insert(0, str(SRC))
 
 
 def _load():
+    if str(SRC) in sys.path:
+        sys.path.remove(str(SRC))
+    sys.path.insert(0, str(SRC))
     for name in ("data_io", "forecast", "price_forecast", "simulation", "make_results", "verify_problem43"):
         sys.modules.pop(name, None)
     dio = importlib.import_module("data_io")
@@ -55,4 +58,3 @@ def test_q43_verifier_recomputes_dynamic_actual_price_cost():
     report = verifier.verify_solution43(result)
     assert not report["passed"]
     assert any("cash cost baseline" in error for error in report["errors"])
-

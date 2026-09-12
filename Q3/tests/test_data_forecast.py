@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 import sys
 from tempfile import TemporaryDirectory
@@ -99,6 +99,26 @@ def test_information_forecast_history_is_cut_off_before_issue_day():
     # Prior operating days average to 9 kWh; source columns 108 and 109 are
     # the 18:00 and 18:10 left endpoints.  Current-day 9,999 is excluded.
     np.testing.assert_allclose(result.load_energy, [9.0, 9.0])
+
+
+def test_load_forecast_reuses_q2_week_lag_when_available():
+    load = np.stack([np.full(144, float(day + 1)) for day in range(10)])
+    dates = tuple(date(2025, 1, 1) + timedelta(days=i) for i in range(10))
+    data = dio.InputData(
+        dates=dates,
+        load_energy=load,
+        pv_energy=np.zeros_like(load),
+        price=np.ones_like(load),
+        pv_hourly_forecasts={(date(2025, 1, 10), 0): np.zeros(24)},
+    )
+
+    result = fc.build_information_forecast(
+        data, date(2025, 1, 10), "0:00", horizon_steps=2
+    )
+
+    # The exact midnight cell belongs to the preceding business row; 00:10
+    # belongs to Jan 10's row.  Both use the literal timestamp seven days ago.
+    np.testing.assert_allclose(result.load_energy, [2.0, 3.0])
 
 
 def test_pv_scenarios_use_only_residual_days_before_issue_day():

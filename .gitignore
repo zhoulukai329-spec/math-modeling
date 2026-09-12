@@ -15,5 +15,6 @@ Q4-3/figures/
 .fig-*/
 .sensitivity-*/
 .test-tmp-*/
+pytest-*/
 
 .idea/

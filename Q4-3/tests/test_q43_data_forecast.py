@@ -12,6 +12,9 @@ sys.path.insert(0, str(SRC))
 
 
 def _modules():
+    if str(SRC) in sys.path:
+        sys.path.remove(str(SRC))
+    sys.path.insert(0, str(SRC))
     for name in ("data_io", "price_forecast"):
         sys.modules.pop(name, None)
     return importlib.import_module("data_io"), importlib.import_module("price_forecast")
@@ -95,6 +98,39 @@ def test_price_scenario_path_continues_forward_across_source_midnight():
     scenarios = pf.build_price_scenarios(point, price, stamps, targets, issue, source_days=[2])
     assert scenarios.shape == (1, 3)
     source_targets = np.array([stamps[2, -1], stamps[3, 0], stamps[3, 1]], dtype=object)
-    historical_point = pf.build_causal_price_forecast(price, stamps, source_targets[0], source_targets)
+    source_issue = source_targets[0] - (targets[0] - issue)
+    historical_point = pf.build_causal_price_forecast(price, stamps, source_issue, source_targets)
     source_actual = np.array([price[2, -1], price[3, 0], price[3, 1]])
     np.testing.assert_allclose(scenarios[0], np.maximum(0, point + source_actual - historical_point))
+
+
+def test_price_scenario_uses_matching_historical_revision_clock():
+    _, pf = _modules()
+    _, stamps = _calendar(days=12)
+    price = np.arange(12 * 144, dtype=float).reshape(12, 144) + 1
+    issue = datetime(2025, 1, 10, 6)
+    targets = np.array([issue + timedelta(minutes=10 * i) for i in range(144)], dtype=object)
+    point = pf.build_causal_price_forecast(price, stamps, issue, targets)
+    scenarios = pf.build_price_scenarios(point, price, stamps, targets, issue, source_days=[2])
+    source_targets = stamps.ravel()[2 * 144 + 35:2 * 144 + 35 + 144]
+    source_issue = source_targets[0]
+    historical_point = pf.build_causal_price_forecast(price, stamps, source_issue, source_targets)
+    source_actual = price.ravel()[2 * 144 + 35:2 * 144 + 35 + 144]
+    np.testing.assert_allclose(scenarios[0], np.maximum(0, point + source_actual - historical_point))
+
+
+def test_q43_load_forecast_reuses_q2_week_lag():
+    data_io, _ = _modules()
+    sys.modules.pop("forecast", None)
+    forecast = importlib.import_module("forecast")
+    dates, _ = _calendar(days=10)
+    load = np.stack([np.full(144, float(day + 1)) for day in range(10)])
+    data = data_io.InputData(
+        dates=dates,
+        load_energy=load,
+        pv_energy=np.zeros_like(load),
+        price=np.ones_like(load),
+        pv_hourly_forecasts={(date(2025, 1, 10), 0): np.zeros(24)},
+    )
+    result = forecast.build_information_forecast(data, date(2025, 1, 10), 0, horizon_steps=2)
+    np.testing.assert_allclose(result.load_energy, [2.0, 3.0])

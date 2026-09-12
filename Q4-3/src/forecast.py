@@ -56,6 +56,26 @@ def _causal_load_profile(data: InputData, issue_time: datetime) -> np.ndarray:
     return np.divide(total, count, out=np.zeros(144, dtype=float), where=count > 0)
 
 
+def _causal_load_forecast(
+    data: InputData, issue_time: datetime, targets: Sequence[datetime]
+) -> np.ndarray:
+    """Reuse Q2's week-lag rule, with its causal early-history fallback."""
+    stamps = source_datetimes(list(data.dates))
+    lookup = {
+        stamp: float(value)
+        for stamp, value in zip(stamps.ravel(), data.load_energy.ravel())
+    }
+    fallback = _causal_load_profile(data, issue_time)
+    values = []
+    for target in targets:
+        week_lag = target - timedelta(days=7)
+        if week_lag < issue_time and week_lag in lookup:
+            values.append(lookup[week_lag])
+        else:
+            values.append(float(fallback[_source_column(target)]))
+    return np.asarray(values, dtype=float)
+
+
 def _interpolate_pv_energy(hourly_kw: np.ndarray, issue_time: datetime, targets: Sequence[datetime]) -> np.ndarray:
     """Linearly interpolate hourly PV kW and convert to kWh once.
 
@@ -92,8 +112,7 @@ def build_information_forecast(
         raise KeyError(f"missing PV forecast for {issue_day.isoformat()} {release_minutes // 60:02d}:{release_minutes % 60:02d}")
 
     targets = tuple(issue_time + timedelta(minutes=10 * i) for i in range(horizon_steps))
-    profile = _causal_load_profile(data, issue_time)
-    load_energy = np.asarray([profile[_source_column(target)] for target in targets])
+    load_energy = _causal_load_forecast(data, issue_time, targets)
     pv_energy = _interpolate_pv_energy(hourly_kw, issue_time, targets)
     return InformationForecast(issue_time, np.asarray(targets, dtype=object), load_energy, pv_energy)
 

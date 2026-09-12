@@ -16,7 +16,7 @@ from verify_problem3 import verify_solution
 def build_parser():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--mode", choices=("smoke", "full", "experiments"), default="smoke")
-    parser.add_argument("--date-start", default="2025-01-01")
+    parser.add_argument("--date-start", default="2025-02-01")
     parser.add_argument("--date-end")
     parser.add_argument("--horizon-steps", type=int)
     parser.add_argument("--max-steps", type=int)
@@ -32,6 +32,9 @@ def build_parser():
     parser.add_argument("--cvar-alpha", type=float)
     parser.add_argument("--initial-soc", type=float, default=6000)
     parser.add_argument("--revision-hours", type=int, nargs="+", default=[6, 12, 18])
+    parser.add_argument("--experiment-dates", nargs="+",
+                        default=["2025-02-01", "2025-05-01", "2025-08-01", "2025-11-01"],
+                        help="代表日修订时刻消融；仅在 experiments 模式使用")
     parser.add_argument("--backend", choices=("event-policy", "rolling-milp"), default="event-policy",
                         help="event-policy用于快速全年计算；rolling-milp仅建议作代表日精度对照")
     parser.add_argument("--attachment-dir", type=Path, default=ATTACHMENT_DIR)

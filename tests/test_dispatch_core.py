@@ -101,3 +101,17 @@ def test_duplicate_scenarios_merge_probabilities_in_first_seen_order():
 def test_scenario_probabilities_are_validated():
     with pytest.raises(ValueError, match="probabilities"):
         deduplicate_scenarios(np.ones((2, 3)), [0.2, 0.2])
+
+
+def test_small_positive_charge_still_sets_charge_mode():
+    step = dispatch_step(
+        load_energy=0.0,
+        pv_energy=0.0,
+        commitment=5e-6,
+        soc=6000.0,
+        charge_reference=5e-6,
+        discharge_reference=0.0,
+        limits=LIMITS,
+    )
+    assert step.charge == 5e-6
+    assert step.mode == 1

@@ -57,17 +57,27 @@ def build_price_scenarios(point_forecast, price_actual, timestamps, target_times
         raise ValueError("invalid point forecast, targets, or source days")
     issue = issue_time if isinstance(issue_time, datetime) else datetime.fromisoformat(str(issue_time))
     scenarios = []
-    target_offsets = np.array([(target.hour * 60 + target.minute) // 10 - 1 for target in targets])
+    if len(targets) == 0:
+        raise ValueError("target_times must not be empty")
+    start_step = ((targets[0].hour * 60 + targets[0].minute) // 10 - 1) % 144
+    flat_time, flat_price = times.ravel(), price.ravel()
     for source in sources:
         if source < 0 or source >= len(price):
             residual = np.zeros(len(targets))
         else:
-            source_targets = times[source, np.mod(target_offsets, 144)]
+            # Business rows run 00:10 ... next-day 00:00.  Once a historical
+            # path reaches that final cell it must continue into the next row,
+            # not wrap back to 00:10 in the same row.
+            flat_start = int(source) * 144 + start_step
+            flat_indices = flat_start + np.arange(len(targets), dtype=int)
+            if flat_indices[-1] >= flat_time.size:
+                raise ValueError("price scenario source has insufficient following history")
+            source_targets = flat_time[flat_indices]
             if np.any(source_targets >= issue):
                 raise ValueError("price scenario source is not fully historical")
+            source_issue = source_targets[0] - (targets[0] - issue)
             historical_point = build_causal_price_forecast(price, times,
-                datetime.combine(source_targets[0].date(), datetime.min.time()), source_targets)
-            residual = price[source, np.mod(target_offsets, 144)] - historical_point
+                source_issue, source_targets)
+            residual = flat_price[flat_indices] - historical_point
         scenarios.append(np.maximum(0.0, point + residual))
     return np.asarray(scenarios, dtype=float)
-

@@ -1,0 +1,686 @@
+[
+  {
+    "date": "2025-02-01",
+    "revision_hours": [],
+    "costs": {
+      "baseline": 22667.209097660438,
+      "revision_up": 0.0,
+      "revision_down": 0.0,
+      "emergency": 1772.8545485622678
+    },
+    "total_cost": 24440.063646222705,
+    "emergency_energy": 332.0639004629627,
+    "emergency_intervals": 17,
+    "minimum_soc": 2021.947471193416,
+    "end_soc": 6525.414190329216,
+    "elapsed_seconds": 5.703692800016142,
+    "solve_count": 1,
+    "executed_steps": 144,
+    "verified": true
+  },
+  {
+    "date": "2025-02-01",
+    "revision_hours": [
+      6
+    ],
+    "costs": {
+      "baseline": 22667.209097660438,
+      "revision_up": 0.0,
+      "revision_down": 0.0,
+      "emergency": 2029.4682892589117
+    },
+    "total_cost": 24696.67738691935,
+    "emergency_energy": 385.91129560185175,
+    "emergency_intervals": 20,
+    "minimum_soc": 2032.5275875385776,
+    "end_soc": 6535.994306674377,
+    "elapsed_seconds": 9.53899490000913,
+    "solve_count": 2,
+    "executed_steps": 144,
+    "verified": true
+  },
+  {
+    "date": "2025-02-01",
+    "revision_hours": [
+      12
+    ],
+    "costs": {
+      "baseline": 22667.209097660438,
+      "revision_up": 0.0,
+      "revision_down": 0.0,
+      "emergency": 1796.9412741432864
+    },
+    "total_cost": 24464.150371803724,
+    "emergency_energy": 336.9782124999998,
+    "emergency_intervals": 18,
+    "minimum_soc": 2001.685244074073,
+    "end_soc": 6505.1519632098725,
+    "elapsed_seconds": 9.722333400015486,
+    "solve_count": 2,
+    "executed_steps": 144,
+    "verified": true
+  },
+  {
+    "date": "2025-02-01",
+    "revision_hours": [
+      18
+    ],
+    "costs": {
+      "baseline": 22667.209097660438,
+      "revision_up": 0.0,
+      "revision_down": 0.0,
+      "emergency": 1772.8617379872678
+    },
+    "total_cost": 24440.070835647704,
+    "emergency_energy": 332.0650449074072,
+    "emergency_intervals": 17,
+    "minimum_soc": 2021.948742798353,
+    "end_soc": 6412.495650761315,
+    "elapsed_seconds": 9.834608899982413,
+    "solve_count": 2,
+    "executed_steps": 144,
+    "verified": true
+  },
+  {
+    "date": "2025-02-01",
+    "revision_hours": [
+      6,
+      12
+    ],
+    "costs": {
+      "baseline": 22667.209097660438,
+      "revision_up": 178.62210854601503,
+      "revision_down": 0.0,
+      "emergency": 2009.746243056134
+    },
+    "total_cost": 24855.577449262586,
+    "emergency_energy": 381.8805400462962,
+    "emergency_intervals": 20,
+    "minimum_soc": 1913.5042812037025,
+    "end_soc": 6416.971000339502,
+    "elapsed_seconds": 25.992474099999527,
+    "solve_count": 3,
+    "executed_steps": 144,
+    "verified": true
+  },
+  {
+    "date": "2025-02-01",
+    "revision_hours": [
+      6,
+      18
+    ],
+    "costs": {
+      "baseline": 22667.209097660438,
+      "revision_up": 0.0,
+      "revision_down": 0.0,
+      "emergency": 2029.4682892589121
+    },
+    "total_cost": 24696.67738691935,
+    "emergency_energy": 385.91129560185175,
+    "emergency_intervals": 20,
+    "minimum_soc": 2032.5275875385776,
+    "end_soc": 6423.071253001539,
+    "elapsed_seconds": 13.055637300014496,
+    "solve_count": 3,
+    "executed_steps": 144,
+    "verified": true
+  },
+  {
+    "date": "2025-02-01",
+    "revision_hours": [
+      12,
+      18
+    ],
+    "costs": {
+      "baseline": 22667.209097660438,
+      "revision_up": 0.0,
+      "revision_down": 0.0,
+      "emergency": 1796.9412741432866
+    },
+    "total_cost": 24464.150371803724,
+    "emergency_energy": 336.9782124999998,
+    "emergency_intervals": 18,
+    "minimum_soc": 2001.685244074073,
+    "end_soc": 6460.919086324585,
+    "elapsed_seconds": 13.579343899997184,
+    "solve_count": 3,
+    "executed_steps": 144,
+    "verified": true
+  },
+  {
+    "date": "2025-02-01",
+    "revision_hours": [
+      6,
+      12,
+      18
+    ],
+    "costs": {
+      "baseline": 22667.209097660438,
+      "revision_up": 178.62210854601503,
+      "revision_down": 0.0,
+      "emergency": 2009.7462430561345
+    },
+    "total_cost": 24855.577449262586,
+    "emergency_energy": 381.88054004629623,
+    "emergency_intervals": 20,
+    "minimum_soc": 1913.5042812037025,
+    "end_soc": 6352.043922425158,
+    "elapsed_seconds": 34.03632809998817,
+    "solve_count": 4,
+    "executed_steps": 144,
+    "verified": true
+  },
+  {
+    "date": "2025-05-01",
+    "revision_hours": [],
+    "costs": {
+      "baseline": 31513.431542102124,
+      "revision_up": 0.0,
+      "revision_down": 0.0,
+      "emergency": 19802.365219798143
+    },
+    "total_cost": 51315.79676190027,
+    "emergency_energy": 3868.4036109212243,
+    "emergency_intervals": 71,
+    "minimum_soc": 1316.636906195701,
+    "end_soc": 5389.85131919334,
+    "elapsed_seconds": 23.43604990001768,
+    "solve_count": 1,
+    "executed_steps": 144,
+    "verified": true
+  },
+  {
+    "date": "2025-05-01",
+    "revision_hours": [
+      6
+    ],
+    "costs": {
+      "baseline": 31513.431542102124,
+      "revision_up": 1433.1074471337497,
+      "revision_down": 0.0,
+      "emergency": 16042.833573808684
+    },
+    "total_cost": 48989.372563044555,
+    "emergency_energy": 3091.812470533851,
+    "emergency_intervals": 57,
+    "minimum_soc": 1200.0,
+    "end_soc": 5273.214412997639,
+    "elapsed_seconds": 34.126471600000514,
+    "solve_count": 2,
+    "executed_steps": 144,
+    "verified": true
+  },
+  {
+    "date": "2025-05-01",
+    "revision_hours": [
+      12
+    ],
+    "costs": {
+      "baseline": 31513.431542102124,
+      "revision_up": 154.50535295598135,
+      "revision_down": 0.0,
+      "emergency": 20215.24799434778
+    },
+    "total_cost": 51883.184889405886,
+    "emergency_energy": 3920.505229365253,
+    "emergency_intervals": 70,
+    "minimum_soc": 1200.0,
+    "end_soc": 5273.214412997639,
+    "elapsed_seconds": 34.313544199976604,
+    "solve_count": 2,
+    "executed_steps": 144,
+    "verified": true
+  },
+  {
+    "date": "2025-05-01",
+    "revision_hours": [
+      18
+    ],
+    "costs": {
+      "baseline": 31513.431542102124,
+      "revision_up": 851.98172601232,
+      "revision_down": 0.0,
+      "emergency": 16645.62874708743
+    },
+    "total_cost": 49011.04201520188,
+    "emergency_energy": 3361.398635615669,
+    "emergency_intervals": 70,
+    "minimum_soc": 1261.7185972222212,
+    "end_soc": 5334.93301021986,
+    "elapsed_seconds": 28.190100000007078,
+    "solve_count": 2,
+    "executed_steps": 144,
+    "verified": true
+  },
+  {
+    "date": "2025-05-01",
+    "revision_hours": [
+      6,
+      12
+    ],
+    "costs": {
+      "baseline": 31513.431542102124,
+      "revision_up": 1694.9011109782696,
+      "revision_down": 0.0,
+      "emergency": 16573.5303905005
+    },
+    "total_cost": 49781.86304358089,
+    "emergency_energy": 3169.3042561939196,
+    "emergency_intervals": 57,
+    "minimum_soc": 1200.0,
+    "end_soc": 5273.214412997639,
+    "elapsed_seconds": 37.144944700005,
+    "solve_count": 3,
+    "executed_steps": 144,
+    "verified": true
+  },
+  {
+    "date": "2025-05-01",
+    "revision_hours": [
+      6,
+      18
+    ],
+    "costs": {
+      "baseline": 31513.431542102124,
+      "revision_up": 2691.2198641697223,
+      "revision_down": 0.0,
+      "emergency": 12090.050855284839
+    },
+    "total_cost": 46294.70226155668,
+    "emergency_energy": 2471.348443560671,
+    "emergency_intervals": 56,
+    "minimum_soc": 1254.5629647386102,
+    "end_soc": 5327.777377736249,
+    "elapsed_seconds": 31.807466500002192,
+    "solve_count": 3,
+    "executed_steps": 144,
+    "verified": true
+  },
+  {
+    "date": "2025-05-01",
+    "revision_hours": [
+      12,
+      18
+    ],
+    "costs": {
+      "baseline": 31513.431542102124,
+      "revision_up": 1342.8268578906982,
+      "revision_down": 0.0,
+      "emergency": 16523.913739164123
+    },
+    "total_cost": 49380.172139156944,
+    "emergency_energy": 3334.794626589045,
+    "emergency_intervals": 69,
+    "minimum_soc": 1253.1597345679036,
+    "end_soc": 5326.374147565542,
+    "elapsed_seconds": 31.822945599997183,
+    "solve_count": 3,
+    "executed_steps": 144,
+    "verified": true
+  },
+  {
+    "date": "2025-05-01",
+    "revision_hours": [
+      6,
+      12,
+      18
+    ],
+    "costs": {
+      "baseline": 31513.431542102124,
+      "revision_up": 3106.3037144725313,
+      "revision_down": 0.0,
+      "emergency": 12107.722686168401
+    },
+    "total_cost": 46727.45794274306,
+    "emergency_energy": 2470.237760325454,
+    "emergency_intervals": 56,
+    "minimum_soc": 1255.3015841136091,
+    "end_soc": 5328.515997111248,
+    "elapsed_seconds": 40.47364740000921,
+    "solve_count": 4,
+    "executed_steps": 144,
+    "verified": true
+  },
+  {
+    "date": "2025-08-01",
+    "revision_hours": [],
+    "costs": {
+      "baseline": 23392.089024933965,
+      "revision_up": 0.0,
+      "revision_down": 0.0,
+      "emergency": 6685.1140378101845
+    },
+    "total_cost": 30077.20306274415,
+    "emergency_energy": 1570.5543618055553,
+    "emergency_intervals": 40,
+    "minimum_soc": 1473.7867121913573,
+    "end_soc": 5892.683212191358,
+    "elapsed_seconds": 3.8889244999736547,
+    "solve_count": 1,
+    "executed_steps": 144,
+    "verified": true
+  },
+  {
+    "date": "2025-08-01",
+    "revision_hours": [
+      6
+    ],
+    "costs": {
+      "baseline": 23392.089024933965,
+      "revision_up": 0.0,
+      "revision_down": 0.0,
+      "emergency": 7211.296676273838
+    },
+    "total_cost": 30603.3857012078,
+    "emergency_energy": 1681.2833175925919,
+    "emergency_intervals": 45,
+    "minimum_soc": 1489.870767530656,
+    "end_soc": 5908.767267530657,
+    "elapsed_seconds": 9.138365899998462,
+    "solve_count": 2,
+    "executed_steps": 144,
+    "verified": true
+  },
+  {
+    "date": "2025-08-01",
+    "revision_hours": [
+      12
+    ],
+    "costs": {
+      "baseline": 23392.089024933965,
+      "revision_up": 0.0,
+      "revision_down": 0.0,
+      "emergency": 6978.038734612264
+    },
+    "total_cost": 30370.12775954623,
+    "emergency_energy": 1619.4893217592585,
+    "emergency_intervals": 41,
+    "minimum_soc": 1528.1588899176932,
+    "end_soc": 5834.8650548996875,
+    "elapsed_seconds": 6.357713300007163,
+    "solve_count": 2,
+    "executed_steps": 144,
+    "verified": true
+  },
+  {
+    "date": "2025-08-01",
+    "revision_hours": [
+      18
+    ],
+    "costs": {
+      "baseline": 23392.089024933965,
+      "revision_up": 724.8812608071868,
+      "revision_down": 0.0,
+      "emergency": 3554.8416317907404
+    },
+    "total_cost": 27671.811917531893,
+    "emergency_energy": 1069.100129861111,
+    "emergency_intervals": 38,
+    "minimum_soc": 1348.6691558641967,
+    "end_soc": 5667.933352757202,
+    "elapsed_seconds": 8.077313699992374,
+    "solve_count": 2,
+    "executed_steps": 144,
+    "verified": true
+  },
+  {
+    "date": "2025-08-01",
+    "revision_hours": [
+      6,
+      12
+    ],
+    "costs": {
+      "baseline": 23392.089024933965,
+      "revision_up": 0.0,
+      "revision_down": 0.0,
+      "emergency": 7384.998672687263
+    },
+    "total_cost": 30777.087697621228,
+    "emergency_energy": 1709.386975925925,
+    "emergency_intervals": 45,
+    "minimum_soc": 1440.2166178687294,
+    "end_soc": 5850.714944560188,
+    "elapsed_seconds": 13.43895790001261,
+    "solve_count": 3,
+    "executed_steps": 144,
+    "verified": true
+  },
+  {
+    "date": "2025-08-01",
+    "revision_hours": [
+      6,
+      18
+    ],
+    "costs": {
+      "baseline": 23392.089024933965,
+      "revision_up": 719.0036542515543,
+      "revision_down": 0.0,
+      "emergency": 4009.6336506155076
+    },
+    "total_cost": 28120.726329801026,
+    "emergency_energy": 1168.4769148148146,
+    "emergency_intervals": 43,
+    "minimum_soc": 1348.6691558641967,
+    "end_soc": 5667.933352757201,
+    "elapsed_seconds": 13.210793300007936,
+    "solve_count": 3,
+    "executed_steps": 144,
+    "verified": true
+  },
+  {
+    "date": "2025-08-01",
+    "revision_hours": [
+      12,
+      18
+    ],
+    "costs": {
+      "baseline": 23392.089024933965,
+      "revision_up": 703.9933753882652,
+      "revision_down": 0.0,
+      "emergency": 3610.9709016331
+    },
+    "total_cost": 27707.05330195533,
+    "emergency_energy": 1080.2003745370369,
+    "emergency_intervals": 39,
+    "minimum_soc": 1348.6691558641967,
+    "end_soc": 5681.44885449332,
+    "elapsed_seconds": 11.437285599997267,
+    "solve_count": 3,
+    "executed_steps": 144,
+    "verified": true
+  },
+  {
+    "date": "2025-08-01",
+    "revision_hours": [
+      6,
+      12,
+      18
+    ],
+    "costs": {
+      "baseline": 23392.089024933965,
+      "revision_up": 853.0533673689908,
+      "revision_down": 0.0,
+      "emergency": 4014.4613631456014
+    },
+    "total_cost": 28259.603755448556,
+    "emergency_energy": 1169.5449037037038,
+    "emergency_intervals": 43,
+    "minimum_soc": 1348.0545725308627,
+    "end_soc": 5665.268104369855,
+    "elapsed_seconds": 18.569433800003026,
+    "solve_count": 4,
+    "executed_steps": 144,
+    "verified": true
+  },
+  {
+    "date": "2025-11-01",
+    "revision_hours": [],
+    "costs": {
+      "baseline": 17592.076189629282,
+      "revision_up": 0.0,
+      "revision_down": 0.0,
+      "emergency": 3156.1270080366276
+    },
+    "total_cost": 20748.20319766591,
+    "emergency_energy": 956.9907621401758,
+    "emergency_intervals": 40,
+    "minimum_soc": 1438.8510908930284,
+    "end_soc": 6145.0857799362975,
+    "elapsed_seconds": 4.641387899988331,
+    "solve_count": 1,
+    "executed_steps": 144,
+    "verified": true
+  },
+  {
+    "date": "2025-11-01",
+    "revision_hours": [
+      6
+    ],
+    "costs": {
+      "baseline": 17592.076189629282,
+      "revision_up": 0.0,
+      "revision_down": 0.0,
+      "emergency": 3194.9769876744676
+    },
+    "total_cost": 20787.05317730375,
+    "emergency_energy": 969.5572255924505,
+    "emergency_intervals": 40,
+    "minimum_soc": 1429.3720039979607,
+    "end_soc": 6238.834021404492,
+    "elapsed_seconds": 7.872638499975437,
+    "solve_count": 2,
+    "executed_steps": 144,
+    "verified": true
+  },
+  {
+    "date": "2025-11-01",
+    "revision_hours": [
+      12
+    ],
+    "costs": {
+      "baseline": 17592.076189629282,
+      "revision_up": 0.0,
+      "revision_down": 0.0,
+      "emergency": 3087.2583605052223
+    },
+    "total_cost": 20679.334550134503,
+    "emergency_energy": 941.8269270661866,
+    "emergency_intervals": 40,
+    "minimum_soc": 1438.8510908930284,
+    "end_soc": 6287.744875191519,
+    "elapsed_seconds": 10.019920999999158,
+    "solve_count": 2,
+    "executed_steps": 144,
+    "verified": true
+  },
+  {
+    "date": "2025-11-01",
+    "revision_hours": [
+      18
+    ],
+    "costs": {
+      "baseline": 17592.076189629282,
+      "revision_up": 0.0,
+      "revision_down": 0.0,
+      "emergency": 3156.0710966005176
+    },
+    "total_cost": 20748.1472862298,
+    "emergency_energy": 956.981810751287,
+    "emergency_intervals": 40,
+    "minimum_soc": 1438.8510908930284,
+    "end_soc": 6137.493643529403,
+    "elapsed_seconds": 8.290975600015372,
+    "solve_count": 2,
+    "executed_steps": 144,
+    "verified": true
+  },
+  {
+    "date": "2025-11-01",
+    "revision_hours": [
+      6,
+      12
+    ],
+    "costs": {
+      "baseline": 17592.076189629282,
+      "revision_up": 0.0,
+      "revision_down": 0.0,
+      "emergency": 3031.0290791573625
+    },
+    "total_cost": 20623.105268786647,
+    "emergency_energy": 933.2957488606258,
+    "emergency_intervals": 39,
+    "minimum_soc": 1429.3720039979607,
+    "end_soc": 6298.713290221392,
+    "elapsed_seconds": 14.922953800007235,
+    "solve_count": 3,
+    "executed_steps": 144,
+    "verified": true
+  },
+  {
+    "date": "2025-11-01",
+    "revision_hours": [
+      6,
+      18
+    ],
+    "costs": {
+      "baseline": 17592.076189629282,
+      "revision_up": 0.0,
+      "revision_down": 0.0,
+      "emergency": 3194.9769876744676
+    },
+    "total_cost": 20787.05317730375,
+    "emergency_energy": 969.5572255924505,
+    "emergency_intervals": 40,
+    "minimum_soc": 1429.3720039979607,
+    "end_soc": 6184.52116953333,
+    "elapsed_seconds": 13.678652599977795,
+    "solve_count": 3,
+    "executed_steps": 144,
+    "verified": true
+  },
+  {
+    "date": "2025-11-01",
+    "revision_hours": [
+      12,
+      18
+    ],
+    "costs": {
+      "baseline": 17592.076189629282,
+      "revision_up": 0.0,
+      "revision_down": 0.0,
+      "emergency": 3087.2583605052223
+    },
+    "total_cost": 20679.334550134503,
+    "emergency_energy": 941.8269270661866,
+    "emergency_intervals": 40,
+    "minimum_soc": 1438.8510908930284,
+    "end_soc": 6210.181939833471,
+    "elapsed_seconds": 16.35141079997993,
+    "solve_count": 3,
+    "executed_steps": 144,
+    "verified": true
+  },
+  {
+    "date": "2025-11-01",
+    "revision_hours": [
+      6,
+      12,
+      18
+    ],
+    "costs": {
+      "baseline": 17592.076189629282,
+      "revision_up": 0.0,
+      "revision_down": 0.0,
+      "emergency": 3031.0290791573625
+    },
+    "total_cost": 20623.105268786647,
+    "emergency_energy": 933.2957488606258,
+    "emergency_intervals": 39,
+    "minimum_soc": 1429.3720039979607,
+    "end_soc": 6215.861854707569,
+    "elapsed_seconds": 21.482398499996634,
+    "solve_count": 4,
+    "executed_steps": 144,
+    "verified": true
+  }
+]
