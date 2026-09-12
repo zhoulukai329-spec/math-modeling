@@ -54,6 +54,8 @@ def main(argv=None):
     end = args.date_end or ("2025-12-31" if full else args.date_start)
     # Full mode starts in January so the February SOC and residual library are causal.
     start = "2025-01-01" if full else args.date_start
+    from dispatch_core.workbook_contract import preflight_template
+    preflight_template(args.attachment_dir / "附件5/result4-3.xlsx", args.output_dir / "result4-3.xlsx")
     result = simulate(config, start, end)
     if full:
         result = trim_result(result, args.date_start)

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Joint dynamic-price/net-load two-stage MILP and causal dispatch."""
 import sys
 from pathlib import Path

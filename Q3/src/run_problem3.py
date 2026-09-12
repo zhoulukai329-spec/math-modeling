@@ -84,6 +84,8 @@ def main(argv=None):
         revision_hours=tuple(args.revision_hours), backend=args.backend, **tuning)
     end = args.date_end or (args.date_start if args.mode == "smoke" else "2025-12-31")
     sim_start = "2025-01-01" if args.mode == "full" else args.date_start
+    from dispatch_core.workbook_contract import preflight_template
+    preflight_template(args.attachment_dir / "附件5/result3.xlsx", args.output_dir / "result3.xlsx")
     result = simulate(config, sim_start, end)
     if args.mode == "full":
         result = trim_result(result, args.date_start)

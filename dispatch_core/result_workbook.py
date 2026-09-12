@@ -1,188 +1,170 @@
-"""Complete calendar battery tables and business-row emergency records."""
-from copy import copy
-from datetime import datetime, time, timedelta
-
+"""Preserve the official submission template and independently audit all cells."""
+from datetime import datetime, timedelta
+from pathlib import Path
+import os
+import tempfile
 import numpy as np
 from openpyxl import load_workbook
+from .calendar_boundary import boundary_errors
+from .workbook_contract import preflight_template
 
 
 def _physical(result):
-    values = {
-        stamp: {key: float(getattr(result, key)[i, j])
-                for key in ('charge', 'discharge', 'soc_before', 'soc_after')}
-        for i, row in enumerate(result.timestamps)
-        for j, stamp in enumerate(row) if result.executed[i, j]
-    }
-    boundary = getattr(result, 'calendar_boundary', None)
+    rows = {stamp: (float(result.charge[i,j]), float(result.discharge[i,j]),
+                    float(result.soc_before[i,j]), float(result.soc_after[i,j]))
+            for i,row in enumerate(result.timestamps) for j,stamp in enumerate(row)
+            if result.executed[i,j]}
+    boundary = getattr(result, "calendar_boundary", None)
     if boundary:
-        values[datetime.fromisoformat(boundary['timestamp'])] = boundary
-    return values
-
-
-def _reset_sheet(sheet):
-    styles = [copy(cell._style) for cell in sheet[2]]
-    for merged in list(sheet.merged_cells.ranges):
-        sheet.unmerge_cells(str(merged))
-    sheet.delete_rows(2, sheet.max_row)
-    return styles
-
-
-def _append(sheet, values, styles):
-    sheet.append(values)
-    for cell, style in zip(sheet[sheet.max_row], styles):
-        cell._style = copy(style)
-
-
-def _clock(minutes):
-    days, minute = divmod(minutes, 1440)
-    return f'{minute // 60}:{minute % 60:02d}' + (f'+{days}' if days else '')
+        rows[datetime.fromisoformat(boundary["timestamp"])] = tuple(
+            float(boundary[k]) for k in ("charge","discharge","soc_before","soc_after"))
+    return rows
 
 
 def write_workbook(result, output_path, template_path):
-    from pathlib import Path
-    output, template = Path(output_path), Path(template_path)
-    if output.resolve() == template.resolve():
-        raise ValueError('output must not overwrite the attachment template')
-    book = load_workbook(template)
-    lookup = {day: i for i, day in enumerate(result.dates)}
-    for name, matrix in [('计划购电量', result.baseline), ('调整购电量', result.final_commitment)]:
-        sheet = book[name]
-        for r in range(2, sheet.max_row + 1):
-            day = sheet.cell(r, 1).value.date()
-            if day not in lookup:
+    output = Path(output_path)
+    preflight_template(template_path, output)
+    errors = boundary_errors(result)
+    if errors:
+        raise ValueError("; ".join(errors))
+    book = load_workbook(template_path)
+    temporary = None
+    try:
+        by_day = {day:i for i,day in enumerate(result.dates)}
+        for name, matrix in (("计划购电量",result.baseline),("调整购电量",result.final_commitment)):
+            sheet = book[name]
+            for row in range(2,sheet.max_row+1):
+                day = sheet.cell(row,1).value.date()
+                if day not in by_day:
+                    continue
+                i = by_day[day]
+                for column,value in enumerate(matrix[i],2):
+                    sheet.cell(row,column).value = float(value) if np.isfinite(value) else None
+                if np.isfinite(matrix[i]).all():
+                    sheet.cell(row,146).value = float(matrix[i].sum())
+                    sheet.cell(row,147).value = (float(result.price[i] @ matrix[i]) if name == "计划购电量"
+                        else float(sum(v.up_cost+v.down_cost for v in result.versions if v.target_times[0].date() == day)))
+        physical = _physical(result)
+        sheet = book["充放电量"]
+        for row in range(2,sheet.max_row+1):
+            anchor = sheet.cell(row,1).value
+            if not isinstance(anchor,datetime):
                 continue
-            i = lookup[day]
-            for j, value in enumerate(matrix[i], 2):
-                sheet.cell(r, j, float(value) if np.isfinite(value) else None)
-            if np.isfinite(matrix[i]).all():
-                sheet.cell(r, 146, float(matrix[i].sum()))
-                fee = (float(result.price[i] @ result.baseline[i]) if name == '计划购电量' else
-                       sum(v.up_cost + v.down_cost for v in result.versions
-                           if v.target_times[0].date() == day))
-                sheet.cell(r, 147, fee)
-    physical = _physical(result)
-    sheet = book['充放电量']
-    styles = _reset_sheet(sheet)
-    for day in result.dates:
-        midnight = datetime.combine(day, time())
-        for block in range(6):
-            stamps = [midnight + timedelta(hours=block * 4, minutes=10 * j) for j in range(24)]
-            sums = ([sum(physical[t][key] for t in stamps) for key in ('charge', 'discharge')]
-                    if all(t in physical for t in stamps) else [None, None])
-            state = None
-            if block < 2:
-                target = midnight + timedelta(days=block)
-                if target in physical:
-                    state = physical[target]['soc_before']
-                elif target - timedelta(minutes=10) in physical:
-                    state = physical[target - timedelta(minutes=10)]['soc_after']
-            _append(sheet, [midnight if block == 0 else None,
-                           f'{block * 4}:00-{(block + 1) * 4}:00', *sums,
-                           ('0:00' if block == 0 else '24:00') if block < 2 else None,
-                           state], styles)
-    sheet = book['紧急购电量']
-    styles = _reset_sheet(sheet)
-    for i, day in enumerate(result.dates):
-        positive = np.flatnonzero(result.executed[i] & (result.emergency[i] > 1e-7))
-        groups = np.split(positive, np.flatnonzero(np.diff(positive) != 1) + 1) if len(positive) else []
-        midnight = datetime.combine(day, time())
-        if not groups:
-            _append(sheet, [midnight, '无' if result.executed[i].all() else '未完整执行',
-                            0.0 if result.executed[i].all() else None], styles)
-        for k, group in enumerate(groups):
-            label = f'{_clock((int(group[0]) + 1) * 10)}-{_clock((int(group[-1]) + 2) * 10)}'
-            if not result.executed[i].all():
-                label = '已执行部分：' + label
-            _append(sheet, [midnight if k == 0 else None, label,
-                            float(result.emergency[i, group].sum())], styles)
-    output.parent.mkdir(parents=True, exist_ok=True)
-    book.save(output)
-    book.close()
-    return output
+            for block in range(6):
+                stamps = [anchor+timedelta(hours=4*block,minutes=10*k) for k in range(24)]
+                for column,index in ((3,0),(4,1)):
+                    sheet.cell(row+block,column).value = (
+                        float(sum(physical[t][index] for t in stamps)) if all(t in physical for t in stamps) else None)
+            for offset in (0,1):
+                t = anchor+timedelta(days=offset)
+                value = physical[t][2] if t in physical else (
+                    physical[t-timedelta(minutes=10)][3] if t-timedelta(minutes=10) in physical else (
+                    result.config.initial_soc if offset == 0 and anchor.date() == result.dates[0] else None))
+                sheet.cell(row+offset,6).value = value
+        sheet = book["紧急购电量"]
+        for row in range(2,sheet.max_row+1):
+            anchor = sheet.cell(row,1).value
+            if not isinstance(anchor,datetime) or anchor.date() not in by_day:
+                continue
+            i = by_day[anchor.date()]
+            active = result.executed[i]
+            indices = np.flatnonzero(active & (result.emergency[i] > 1e-7))
+            if len(indices) or active.all():
+                text = "\n".join(book["计划购电量"].cell(1,int(j)+2).value for j in indices) if len(indices) else "无"
+                sheet.cell(row,2).value = ("" if active.all() else "已执行部分：\n")+text
+                sheet.cell(row,3).value = float(result.emergency[i,active].sum())
+        output.parent.mkdir(parents=True,exist_ok=True)
+        with tempfile.NamedTemporaryFile(dir=output.parent,suffix=".xlsx",delete=False) as handle:
+            temporary = Path(handle.name)
+        book.save(temporary)
+        os.replace(temporary,output)
+        temporary = None
+        return output
+    finally:
+        book.close()
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
 
 
 def verify_workbook(result, path, template_path, require, tolerance):
-    """Check full coverage and recompute cells directly from physical arrays."""
-    book, template = load_workbook(path), load_workbook(template_path)
+    """Reconstruct allowed cells separately from the writer; retain all template constants."""
+    errors = boundary_errors(result,tolerance)
+    for error in errors:
+        require(False,error)
+    if errors:
+        return
+    preflight_template(template_path)
+    book, source = load_workbook(path), load_workbook(template_path)
     try:
-        require(book.sheetnames == template.sheetnames, 'workbook sheets')
-        if book.sheetnames != template.sheetnames:
+        require(book.sheetnames == source.sheetnames,"workbook sheets")
+        if book.sheetnames != source.sheetnames:
             return
-        def equal(actual, expected, label):
-            if expected is None:
-                require(actual is None, label)
-            elif isinstance(expected, (int, float, np.number)):
-                require(isinstance(actual, (int, float)) and np.isfinite(actual)
-                        and abs(actual - expected) <= tolerance, label)
-            else:
-                require(actual == expected, label)
-        by_day = {day: i for i, day in enumerate(result.dates)}
-        for name, matrix in [('计划购电量', result.baseline), ('调整购电量', result.final_commitment)]:
-            sheet, source = book[name], template[name]
-            require((sheet.max_row, sheet.max_column) == (source.max_row, source.max_column), name + ' dimensions')
-            for r in range(1, source.max_row + 1):
-                day = source.cell(r, 1).value.date() if r > 1 else None
-                for c in range(1, 148):
-                    expected = source.cell(r, c).value
-                    if day in by_day and c > 1:
-                        i = by_day[day]
-                        if c <= 145:
-                            expected = float(matrix[i, c-2]) if np.isfinite(matrix[i, c-2]) else None
-                        elif np.isfinite(matrix[i]).all():
-                            expected = (float(matrix[i].sum()) if c == 146 else
-                                        float(result.price[i] @ result.baseline[i]) if name == '计划购电量' else
-                                        sum(v.up_cost + v.down_cost for v in result.versions if v.target_times[0].date() == day))
-                    equal(sheet.cell(r, c).value, expected, f'{name}!{r},{c}')
-        # Include the one preserved calendar-boundary action, without adding it to cash costs.
-        physical = _physical(result)
-        sheet = book['充放电量']
-        require(sheet.max_row == 1 + 6 * len(result.dates), 'battery all-date coverage')
-        for i, day in enumerate(result.dates):
-            midnight = datetime.combine(day, time())
-            for block in range(6):
-                r = 2 + i * 6 + block
-                equal(sheet.cell(r, 1).value, midnight if block == 0 else None, 'battery date')
-                equal(sheet.cell(r, 2).value, f'{block*4}:00-{(block+1)*4}:00', 'battery block')
-                start = midnight + timedelta(hours=4*block)
-                stamps = [start + timedelta(minutes=10*j) for j in range(24)]
-                for c, key in [(3, 'charge'), (4, 'discharge')]:
-                    expected = sum(physical[t][key] for t in stamps) if all(t in physical for t in stamps) else None
-                    equal(sheet.cell(r, c).value, expected, f'battery {day} block {block} {key}')
-                expected = None
-                if block < 2:
-                    target = midnight + timedelta(days=block)
-                    if target in physical:
-                        expected = physical[target]['soc_before']
-                    elif target - timedelta(minutes=10) in physical:
-                        expected = physical[target-timedelta(minutes=10)]['soc_after']
-                equal(sheet.cell(r, 6).value, expected, 'battery boundary SOC')
-        sheet = book['紧急购电量']
-        r = 2
-        for i, day in enumerate(result.dates):
-            intervals = []
-            j = 0
-            while j < 144:
-                if not result.executed[i, j] or result.emergency[i, j] <= 1e-7:
-                    j += 1
+        expected = {}
+        by_day = {day:i for i,day in enumerate(result.dates)}
+        for name,matrix in (("计划购电量",result.baseline),("调整购电量",result.final_commitment)):
+            for row in range(2,source[name].max_row+1):
+                day = source[name].cell(row,1).value.date()
+                if day not in by_day:
                     continue
-                first = j
-                while j < 144 and result.executed[i, j] and result.emergency[i, j] > 1e-7:
-                    j += 1
-                def stamp(k):
-                    minutes = (k + 1) * 10
-                    return f'{minutes % 1440 // 60}:{minutes % 60:02d}' + ('+1' if minutes >= 1440 else '')
-                label = stamp(first) + '-' + stamp(j)
-                if not result.executed[i].all():
-                    label = '已执行部分：' + label
-                intervals.append((label, float(result.emergency[i, first:j].sum())))
-            if not intervals:
-                intervals = [('无', 0.0)] if result.executed[i].all() else [('未完整执行', None)]
-            for k, (label, amount) in enumerate(intervals):
-                equal(sheet.cell(r, 1).value, datetime.combine(day, time()) if k == 0 else None, 'emergency date')
-                equal(sheet.cell(r, 2).value, label, 'emergency interval')
-                equal(sheet.cell(r, 3).value, amount, 'emergency amount')
-                r += 1
-        require(sheet.max_row == r-1, 'emergency all-date coverage')
+                i = by_day[day]
+                for j in range(144):
+                    expected[name,row,j+2] = float(matrix[i,j]) if np.isfinite(matrix[i,j]) else None
+                if np.isfinite(matrix[i]).all():
+                    expected[name,row,146] = float(np.sum(matrix[i]))
+                    expected[name,row,147] = (float(np.sum(result.price[i]*matrix[i])) if name == "计划购电量"
+                        else float(sum(v.up_cost+v.down_cost for v in result.versions if v.target_times[0].date() == day)))
+        # Independent index: do not call the writer's physical lookup.
+        timestamps = list(result.timestamps[result.executed])
+        values = [list(getattr(result,k)[result.executed]) for k in ("charge","discharge","soc_before","soc_after")]
+        boundary = getattr(result,"calendar_boundary",None)
+        if boundary:
+            timestamps.append(datetime.fromisoformat(boundary["timestamp"]))
+            for vector,key in zip(values,("charge","discharge","soc_before","soc_after")):
+                vector.append(boundary[key])
+        index = {stamp:i for i,stamp in enumerate(timestamps)}
+        name = "充放电量"
+        for row in range(2,source[name].max_row+1):
+            anchor = source[name].cell(row,1).value
+            if not isinstance(anchor,datetime):
+                continue
+            for block in range(6):
+                keys = [anchor+timedelta(minutes=240*block+10*j) for j in range(24)]
+                for column,vector in ((3,values[0]),(4,values[1])):
+                    expected[name,row+block,column] = float(np.sum([vector[index[t]] for t in keys])) if all(t in index for t in keys) else None
+            for offset in (0,1):
+                t = anchor+timedelta(days=offset)
+                expected[name,row+offset,6] = (float(values[2][index[t]]) if t in index else
+                    float(values[3][index[t-timedelta(minutes=10)]]) if t-timedelta(minutes=10) in index else
+                    result.config.initial_soc if offset == 0 and anchor.date() == result.dates[0] else None)
+        name = "紧急购电量"
+        for row in range(2,source[name].max_row+1):
+            anchor = source[name].cell(row,1).value
+            if not isinstance(anchor,datetime) or anchor.date() not in by_day:
+                continue
+            i = by_day[anchor.date()]
+            selected = [j for j in range(144) if result.executed[i,j] and result.emergency[i,j] > 1e-7]
+            if selected or result.executed[i].all():
+                text = "\n".join(source["计划购电量"].cell(1,j+2).value for j in selected) if selected else "无"
+                expected[name,row,2] = ("" if result.executed[i].all() else "已执行部分：\n")+text
+                expected[name,row,3] = float(sum(result.emergency[i,j] for j in range(144) if result.executed[i,j]))
+        for original in source:
+            sheet = book[original.title]
+            require((sheet.max_row,sheet.max_column) == (original.max_row,original.max_column),f"workbook {sheet.title} dimensions")
+            require(str(sheet.merged_cells) == str(original.merged_cells),f"workbook {sheet.title} merges")
+            require(sheet.freeze_panes == original.freeze_panes and sheet.print_area == original.print_area,f"workbook {sheet.title} view")
+            column_layout = lambda ws: {k:(v.width,v.hidden,v.min,v.max) for k,v in ws.column_dimensions.items()}
+            row_layout = lambda ws: {k:(v.height,v.hidden,v.outlineLevel) for k,v in ws.row_dimensions.items()}
+            require(column_layout(sheet) == column_layout(original),f"workbook {sheet.title} column layout")
+            require(row_layout(sheet) == row_layout(original),f"workbook {sheet.title} row layout")
+            for row in original:
+                for cell in row:
+                    actual = sheet.cell(cell.row,cell.column)
+                    wanted = expected.get((sheet.title,cell.row,cell.column),cell.value)
+                    valid = (isinstance(actual.value,(int,float)) and np.isfinite(actual.value) and abs(actual.value-wanted) <= tolerance
+                             if isinstance(wanted,(int,float,np.number)) else actual.value == wanted)
+                    label = f"workbook {sheet.title}!{cell.coordinate}"
+                    require(valid,label)
+                    require(tuple(actual._style or (0,)*9) == tuple(cell._style or (0,)*9),label+" style")
     finally:
         book.close()
-        template.close()
+        source.close()

@@ -87,6 +87,12 @@ def write_result3(result: SimulationResult, output_path: str | Path,
 def save_result(result: SimulationResult, output_dir: str | Path, *, prefix: str = "smoke",
                 template_path: str | Path = DEFAULT_TEMPLATE) -> dict[str, Path]:
     """NPZ contains no pickle objects; JSON metadata is embedded for reconstruction."""
+    from dispatch_core.workbook_contract import preflight_template
+    from dispatch_core.calendar_boundary import boundary_errors
+    preflight_template(template_path, Path(output_dir) / "result3.xlsx")
+    errors = boundary_errors(result)
+    if errors:
+        raise ValueError("; ".join(errors))
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     paths = dict(solution=output_dir / f"{prefix}_solution.npz", metrics=output_dir / f"{prefix}_metrics.json",

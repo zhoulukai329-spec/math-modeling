@@ -26,6 +26,8 @@ def main():
     def progress(row):
         print(json.dumps(row), flush=True)
         (args.output_dir / "progress.json").write_text(json.dumps(row, indent=2), encoding="utf-8")
+    from dispatch_core.workbook_contract import preflight_template
+    preflight_template(ATTACHMENT_DIR / "附件5/result3.xlsx", args.output_dir / "result3.xlsx")
     config = build_complete_config(load_inputs())
     if args.calibration:
         record = json.loads(args.calibration.read_text(encoding="utf-8"))

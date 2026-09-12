@@ -53,6 +53,8 @@ def verify_solution(result, *, workbook_path=None, template_path=None, tolerance
     c, d, e, spill = [getattr(result, name)[mask] for name in ("charge", "discharge", "emergency", "spill")]
     before, after, mode = result.soc_before[mask], result.soc_after[mask], result.mode[mask]
     cfg = result.config
+    from dispatch_core.calendar_boundary import boundary_errors
+    errors.extend(boundary_errors(result, tolerance))
     near(result.final_commitment[mask] + result.pv_energy[mask] + d + e,
          result.load_energy[mask] + c + spill, "energy balance")
     near(after, before + cfg.charge_efficiency * c - d / cfg.discharge_efficiency, "SOC dynamics")

@@ -10,6 +10,9 @@ from verify_problem3 import verify_solution
 
 
 def calibrate(config, output_dir, progress=None):
+    from dispatch_core.workbook_contract import preflight_template
+    from make_results import DEFAULT_TEMPLATE
+    preflight_template(DEFAULT_TEMPLATE)
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=True)
     trials = []

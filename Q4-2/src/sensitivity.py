@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Q4-2 场景数与随机种子敏感性检验。"""
 import csv
 import sys
