@@ -12,6 +12,15 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap, PowerNorm
 import numpy as np
 
+from utils.plot_style import (
+    add_panel_labels,
+    apply_publication_style,
+    audit_design,
+    audit_layout,
+    export_figure,
+    publication_subplots,
+)
+
 BLUE = "#0072B2"
 ORANGE = "#E69F00"
 TEAL = "#009E73"
@@ -92,6 +101,83 @@ def load_sensitivity_csv(path):
         for key in numeric:
             row[key] = float(row[key])
     return rows
+
+
+def plot_revision_sensitivity(csv_path, output_dir):
+    """Plot paired representative-day gains from each discrete revision schedule."""
+    with Path(csv_path).open(encoding="utf-8-sig", newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    schedules = ("", "6", "12", "18", "6+12", "6+18", "12+18", "6+12+18")
+    dates = list(dict.fromkeys(row["date"] for row in rows))
+    keys = [(row["date"], row["revision_hours"].strip()) for row in rows]
+    if len(keys) != len(set(keys)):
+        raise ValueError("revision sensitivity contains duplicate date/schedule rows")
+    if not rows or len(dates) < 2:
+        raise ValueError("revision sensitivity requires at least two representative dates")
+    lookup = {}
+    for row in rows:
+        schedule = row["revision_hours"].strip()
+        if schedule not in schedules:
+            raise ValueError(f"unknown revision schedule: {schedule}")
+        if row.get("verified", "").strip().lower() not in {"true", "1", "yes"}:
+            raise ValueError("revision sensitivity contains an unverified run")
+        lookup[(row["date"], schedule)] = (
+            float(row["total_cost"]), float(row["emergency_energy"])
+        )
+    missing = [(day, schedule) for day in dates for schedule in schedules
+               if (day, schedule) not in lookup]
+    if missing:
+        raise ValueError(f"revision sensitivity is incomplete: {missing[:3]}")
+
+    apply_publication_style(language="zh", width="double")
+    fig, axes = publication_subplots(
+        2, 1, width="double", aspect=0.68, height_ratios=(1.05, 1.0), squeeze=False
+    )
+    axes = axes[:, 0]
+    x = np.arange(len(schedules), dtype=float)
+    offsets = np.linspace(-0.18, 0.18, len(dates))
+    colors = (BLUE, ORANGE, TEAL, VERMILION)
+    markers = ("o", "s", "^", "D")
+    cost_gain = np.empty((len(dates), len(schedules)))
+    emergency_gain = np.empty_like(cost_gain)
+    for i, day in enumerate(dates):
+        base_cost, base_emergency = lookup[(day, "")]
+        for j, schedule in enumerate(schedules):
+            cost, emergency = lookup[(day, schedule)]
+            cost_gain[i, j] = base_cost - cost
+            emergency_gain[i, j] = base_emergency - emergency
+        label = day[5:]
+        axes[0].scatter(x + offsets[i], cost_gain[i], s=26, color=colors[i % 4],
+                        marker=markers[i % 4], label=label, zorder=3)
+        axes[1].scatter(x + offsets[i], emergency_gain[i], s=26, color=colors[i % 4],
+                        marker=markers[i % 4], zorder=3)
+    for ax, values in zip(axes, (cost_gain, emergency_gain)):
+        ax.scatter(x, values.mean(axis=0), s=34, marker="X", color=BLACK,
+                   label="四日均值" if ax is axes[0] else None, zorder=4)
+        ax.axhline(0, color=BLACK, lw=0.7, ls="--", alpha=0.65)
+        ax.set_xticks(x)
+        ax.set_xticklabels(("不调整", "6", "12", "18", "6+12", "6+18", "12+18", "6+12+18"))
+        ax.grid(axis="y", color="#D9D9D9", lw=0.5, alpha=0.65)
+        ax.margins(x=0.035)
+    axes[0].set_ylabel("费用节省（元/日）")
+    axes[1].set_ylabel("应急购电减少量（kWh/日）")
+    axes[1].set_xlabel("允许调整的预报时刻组合（时）")
+    axes[0].legend(title="代表日", frameon=False, ncol=5, loc="upper left",
+                   fontsize=6.8, title_fontsize=7.2)
+    axes[0].set_title("配对差值（正值表示改善）", loc="left")
+    add_panel_labels(axes)
+    fig.suptitle("Q3 预报修订时刻的费用—应急购电权衡", fontsize=10)
+    layout_issues = audit_layout(fig)
+    design_issues = audit_design(fig)
+    if layout_issues or design_issues:
+        raise ValueError("figure audit failed: " + "; ".join(layout_issues + design_issues))
+    stem = Path(output_dir) / "fig7_revision_schedule_sensitivity"
+    exports = export_figure(fig, stem, dpi=360, grayscale_preview=True)
+    pdf_path = stem.with_suffix(".pdf")
+    fig.savefig(pdf_path)
+    plt.close(fig)
+    return [Path(exports["png"]), Path(exports["svg"]), pdf_path,
+            Path(exports["grayscale"])]
 
 
 def make_solution_figures(solution_path, output_dir, *, question, dynamic_price=False,
