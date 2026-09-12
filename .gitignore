@@ -1,3 +1,11 @@
 __pycache__
 docs/
 Q2/output/forecast_initialization_*/
+
+# Generated/runtime data. Existing tracked copies remain in remote history;
+# local changes are suppressed separately with skip-worktree.
+Q3/output/
+attachment/
+
+# Q4-2 plots are reproducible generated artifacts.
+Q4-2/output/figures/
