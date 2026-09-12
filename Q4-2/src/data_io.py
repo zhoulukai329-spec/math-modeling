@@ -105,4 +105,3 @@ def read_dynamic_prices(first_price=None):
         typical_price, _, _ = read_price_typical()
         first_price = typical_price[0]
     return dates, align_price_cross_day(raw, first_price)
-

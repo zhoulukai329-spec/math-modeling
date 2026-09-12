@@ -181,4 +181,3 @@ def dispatch_cost(price_actual, g, e):
     planned = float(np.sum(np.asarray(price_actual) * np.asarray(g)))
     emergency = float(np.sum(dio.EMERGENCY_MULT * np.asarray(price_actual) * np.asarray(e)))
     return planned, emergency, planned + emergency
-
