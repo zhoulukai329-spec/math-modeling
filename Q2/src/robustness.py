@@ -32,6 +32,18 @@ ROBUSTNESS_CSV = dio.OUTPUT_DIR / "robustness_scenario_seed.csv"
 BASELINES_CSV = dio.OUTPUT_DIR / "baselines.csv"
 
 
+def formal_start_soc(energy, calendar_days, output_start_day=OUTPUT_START_DAY):
+    """Return each representative day's 00:00 SOC from the saved formal run."""
+    energy = np.asarray(energy, dtype=float)
+    calendar_days = np.asarray(calendar_days, dtype=int)
+    rows = calendar_days - int(output_start_day)
+    if energy.ndim != 2 or energy.shape[1] < 1:
+        raise ValueError("正式SOC数组必须为二维且至少包含00:00列")
+    if np.any(rows < 0) or np.any(rows >= len(energy)):
+        raise ValueError("代表日不在正式结果保存期内")
+    return energy[rows, 0]
+
+
 def output_stat(planned, emergency, e_all, full_year_mask):
     """汇总正式输出期指标。
 
@@ -76,6 +88,10 @@ def _load_context():
 
 def run_scenario_seed_grid(price, net, f, load_resid, pv_resid, v):
     day_idx = np.linspace(OUTPUT_START_DAY, len(net) - 1, 11, dtype=int)
+    with np.load(str(dio.SOLUTION_NPZ), allow_pickle=False) as formal:
+        formal_E = formal["E"].copy()
+        formal_g = formal["g"].copy()
+    start_soc = formal_start_soc(formal_E, day_idx)
     print("=" * 82)
     print("场景数 × 随机种子稳健性（11 个代表日，因果回测）")
     print("=" * 82)
@@ -85,21 +101,35 @@ def run_scenario_seed_grid(price, net, f, load_resid, pv_resid, v):
     for n_sc in [3, 6, 12]:
         for seed in [7, 2025, 99173]:
             costs = []
-            for d in day_idx:
+            baseline_max_g_error = 0.0
+            for d, E0 in zip(day_idx, start_soc):
                 scenarios = fc.scenarios_for_day(
                     d, f, load_resid, pv_resid,
                     n_scenarios=n_sc, lookback=LOOKBACK, seed=seed,
                 )
-                g, first = opt.build_first_stage(price, scenarios, dio.E0_START, v)
+                g, first = opt.build_first_stage(price, scenarios, E0, v)
                 _c, _d, _w, e, _E = opt.causal_dispatch(
-                    net[d], g, dio.E0_START,
+                    net[d], g, E0,
                     discharge_reference=first["stats"]["d_mean"],
                 )
                 _p, _em, total = opt.dispatch_cost(price, g, e)
                 costs.append(total)
+                if n_sc == N_SCENARIOS and seed == 2025:
+                    row = d - OUTPUT_START_DAY
+                    baseline_max_g_error = max(
+                        baseline_max_g_error,
+                        float(np.max(np.abs(g - formal_g[row]))),
+                    )
             avg = float(np.mean(costs))
             rows.append((n_sc, seed, avg))
             print(f"{n_sc:<6}{seed:<8}{avg:>16.2f}")
+            if n_sc == N_SCENARIOS and seed == 2025:
+                if baseline_max_g_error > 1e-5:
+                    raise AssertionError(
+                        "正式参数未能复现主结果："
+                        f"计划购电最大误差 {baseline_max_g_error:.3e} kWh"
+                    )
+                print(f"  正式参数复现最大购电误差: {baseline_max_g_error:.3e} kWh")
 
     print("\n各场景数下跨种子波动范围")
     print("-" * 82)
