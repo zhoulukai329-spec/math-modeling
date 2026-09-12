@@ -79,9 +79,8 @@ def test_information_forecast_interpolates_hourly_pv_without_wrapping_around_day
         datetime(2025, 1, 3, 18, 20),
         datetime(2025, 1, 3, 18, 30),
     ]
-    # Hourly data starts at release + 1h.  The leading value is held, never
-    # borrowed from 24h-ahead data by a circular shift; conversion is once.
-    np.testing.assert_allclose(result.pv_energy, np.full(4, 1.0 / 6.0))
+    # No older publication is supplied in this fixture: explicit startup prior.
+    np.testing.assert_allclose(result.pv_energy, np.zeros(4))
 
 
 def test_information_forecast_history_is_cut_off_before_issue_day():

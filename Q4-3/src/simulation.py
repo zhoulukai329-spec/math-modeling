@@ -23,6 +23,7 @@ if str(Q3_SRC) not in sys.path:
     sys.path.append(str(Q3_SRC))
 from data_io import InputData, coerce_date, load_inputs, source_datetimes
 from forecast import build_information_forecast, build_pv_scenarios
+from forecast import PVForecastTimeline
 from model import MPCProblem, MPCSolution, solve_mpc
 from price_forecast import build_causal_price_forecast, build_price_scenarios
 
@@ -229,19 +230,14 @@ class _ResidualHistory:
         self.times = source_datetimes(list(data.dates))
         self.panel = np.full_like(data.pv_energy, np.nan)
         self.releases, self.keys = _release_catalog(data)
+        self.pv_timeline = PVForecastTimeline(data.pv_hourly_forecasts)
         self.position = 0
 
     def reveal_before(self, cutoff: datetime) -> np.ndarray:
         times = self.times.ravel()
         while self.position < len(times) and times[self.position] < cutoff:
             target = times[self.position]
-            release_index = bisect_right(self.releases, target) - 1
-            if release_index < 0:
-                raise ValueError(f"no published PV forecast available for historical {target}")
-            release = self.releases[release_index]
-            hourly = self.data.pv_hourly_forecasts[self.keys[release_index]]
-            offset = (target - release).total_seconds() / 3600
-            point = np.interp(offset, np.arange(1, 25), hourly) / 6
+            point = self.pv_timeline.energy([target], target)[0]
             # This is the only actual PV read by historical scenario building.
             self.panel.flat[self.position] = self.data.pv_energy.flat[self.position] - point
             self.position += 1
@@ -249,10 +245,10 @@ class _ResidualHistory:
 
 
 def build_historical_residuals(data: InputData, issue_time: datetime) -> np.ndarray:
-    """Actual minus latest-at-target published PV forecast; unknown cells are NaN.
+    """Actual minus latest effective PV forecast; unknown cells are NaN.
 
     Scenario paths sample these errors in chronological order. Their historical
-    forecasts are the latest release at each historical target, so this is a
+    forecasts become effective one hour after release, so this is a
     rolling-forecast error library, not a fixed-lead residual calibration.
     """
     return _ResidualHistory(data).reveal_before(issue_time).copy()

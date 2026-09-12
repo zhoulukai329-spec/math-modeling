@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 import importlib
 from pathlib import Path
 import sys
@@ -40,6 +40,19 @@ def config(sim, data, **changes):
                   backend="event-policy", january_warmup=False)
     values.update(changes)
     return sim.SimulationConfig(**values)
+
+
+def test_forecast_and_residual_switch_only_after_one_hour():
+    dio, sim = modules()
+    data = inputs(dio)
+    day = data.dates[1]
+    data.pv_hourly_forecasts[(day, 0)][:] = 60
+    data.pv_hourly_forecasts[(day, 360)][:] = 600
+    fc = sim.build_information_forecast(data, day, 360, 8)
+    np.testing.assert_allclose(fc.pv_energy, [10] * 6 + [100] * 2)
+    panel = sim.build_historical_residuals(data, datetime.combine(day, datetime.min.time()) + timedelta(hours=7, minutes=10))
+    np.testing.assert_allclose(panel[1, 35:42], [-10] * 6 + [-100])
+    assert np.isnan(panel[1, 42])
 
 
 def test_event_backend_uses_dynamic_forecasts_but_settles_at_actual_target_prices():

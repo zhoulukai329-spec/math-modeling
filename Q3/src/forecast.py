@@ -4,10 +4,17 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from typing import Sequence
+from pathlib import Path
+import sys
 
 import numpy as np
 
 from data_io import InputData, coerce_date, parse_clock_minutes, power_kw_to_energy, source_datetimes
+
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+from dispatch_core.pv_forecast import PVForecastTimeline
 
 
 @dataclass(frozen=True)
@@ -79,13 +86,14 @@ def _causal_load_forecast(
 def _interpolate_pv_energy(hourly_kw: np.ndarray, issue_time: datetime, targets: Sequence[datetime]) -> np.ndarray:
     """Linearly interpolate hourly PV kW and convert to kWh once.
 
-    Attachment 3's first value is for one hour after issue.  Before that
-    point we hold that first published value; after 24 hours we hold the last
-    published value.  Neither operation rotates data across a day boundary.
+    Targets before the first published knot are rejected. Callers needing
+    the first hour must use PVForecastTimeline to select an older publication.
     """
     knots = np.arange(1, 25, dtype=float)
     offsets = np.asarray([(target - issue_time).total_seconds() / 3600.0 for target in targets])
-    interpolated_kw = np.interp(offsets, knots, hourly_kw, left=hourly_kw[0], right=hourly_kw[-1])
+    if np.any(offsets < 1):
+        raise ValueError("PV targets must be at least one hour after publication")
+    interpolated_kw = np.interp(offsets, knots, hourly_kw, left=np.nan, right=hourly_kw[-1])
     return power_kw_to_energy(interpolated_kw)
 
 
@@ -113,7 +121,7 @@ def build_information_forecast(
 
     targets = tuple(issue_time + timedelta(minutes=10 * i) for i in range(horizon_steps))
     load_energy = _causal_load_forecast(data, issue_time, targets)
-    pv_energy = _interpolate_pv_energy(hourly_kw, issue_time, targets)
+    pv_energy = PVForecastTimeline(data.pv_hourly_forecasts).energy(targets, issue_time)
     return InformationForecast(issue_time, np.asarray(targets, dtype=object), load_energy, pv_energy)
 
 

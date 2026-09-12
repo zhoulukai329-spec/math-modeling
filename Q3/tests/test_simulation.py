@@ -147,6 +147,18 @@ def test_residual_panel_uses_published_forecasts_and_only_revealed_cells(sim):
     assert np.isnan(panel[1:]).all()
 
 
+def test_forecast_and_residual_switch_only_after_one_hour(sim):
+    data = inputs()
+    day = data.dates[1]
+    data.pv_hourly_forecasts[(day, 0)][:] = 60
+    data.pv_hourly_forecasts[(day, 360)][:] = 600
+    fc = sim.build_information_forecast(data, day, 360, 8)
+    np.testing.assert_allclose(fc.pv_energy, [10] * 6 + [100] * 2)
+    panel = sim.build_historical_residuals(data, datetime.combine(day, datetime.min.time()) + timedelta(hours=7, minutes=10))
+    np.testing.assert_allclose(panel[1, 35:42], [-10] * 6 + [-100])
+    assert np.isnan(panel[1, 42])
+
+
 def test_recorded_actions_match_real_solver_current_common_action(sim, monkeypatch):
     data = inputs(days=4)
     data.pv_energy[1] = 2
