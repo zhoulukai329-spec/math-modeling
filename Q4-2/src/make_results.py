@@ -17,7 +17,20 @@ spec.loader.exec_module(_base)
 
 build_plan_rows = _base.build_plan_rows
 build_charge_rows = _base.build_charge_rows
-build_emergency_rows = _base.build_emergency_rows
+
+
+def build_emergency_rows(dates, e, threshold=1e-7):
+    """Return one row for every 10-minute interval with emergency purchase."""
+    rows = [["日期", "购电时间段", "购电量"]]
+    for i, serial in enumerate(dates):
+        indices = np.flatnonzero(e[i] > threshold)
+        for j, t in enumerate(indices):
+            start = int(t) * 10
+            end = start + 10
+            label = f"{_base._fmt_minutes(start)}-{_base._fmt_minutes(end)}"
+            date_val = float(serial) if j == 0 else None
+            rows.append([date_val, label, float(e[i, t])])
+    return rows
 
 
 def write_result_xlsx(sheets, output_path=None):

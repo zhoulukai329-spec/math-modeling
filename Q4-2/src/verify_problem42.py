@@ -122,12 +122,11 @@ def check_workbook(z, workbook):
     expected = []
     for i, day in enumerate(dates):
         indices = np.flatnonzero(z["e"][i] > 1e-7)
-        runs = np.split(indices, np.flatnonzero(np.diff(indices) != 1)+1) if len(indices) else []
-        for k, run in enumerate(runs):
-            a, b = int(run[0])*10, (int(run[-1])+1)*10
+        for k, t in enumerate(indices):
+            a, b = int(t)*10, (int(t)+1)*10
             expected.append([float(day) if k == 0 else None,
                              f"{a//60}:{a%60:02d}-{b//60}:{b%60:02d}",
-                             float(z["e"][i,run].sum())])
+                             float(z["e"][i,t])])
     if len(sheets["紧急购电量"]) != len(expected)+1:
         raise AssertionError("紧急购电记录不完整")
     for row, wanted in zip(sheets["紧急购电量"][1:], expected):

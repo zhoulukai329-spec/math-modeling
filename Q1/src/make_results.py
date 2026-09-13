@@ -18,11 +18,11 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-import numpy as np, zipfile, shutil, os
-from xml.etree import ElementTree as ET
+import os
+import zipfile
 
-MAIN_NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'
-ET.register_namespace('', MAIN_NS)
+import numpy as np
+from openpyxl import load_workbook
 
 d = np.load(str(OUTPUT_DIR / 'prob1_solution.npz'))
 t_min, price = d['t_min'], d['price']
@@ -75,60 +75,51 @@ print(f'  弃光量削减       = {w_base.sum() - w.sum():.4f} kWh')
 print(f'  能量闭环校验: 弃光削减 - 购电减少 = {(w_base.sum()-w.sum()) - (x_base.sum()-x.sum()):.4f} kWh'
       f'  ≈ 储能净损耗 {c.sum()-dd.sum():.4f} kWh')
 
-# 填写 result1.xlsx
-def fill_cell(row_el, col_letter, value):
-    """在指定行元素中, 设置某列单元格为数值."""
-    ref = col_letter + row_el.get('r')
-    # 查找已存在的 cell
-    c = None
-    for child in row_el.findall(f'{{{MAIN_NS}}}c'):
-        if child.get('r') == ref:
-            c = child; break
-    if c is None:
-        c = ET.SubElement(row_el, f'{{{MAIN_NS}}}c')
-        c.set('r', ref)
-    # 清除已有 v
-    for v in c.findall(f'{{{MAIN_NS}}}v'):
-        c.remove(v)
-    c.attrib.pop('t', None)          # 数值类型 (去掉共享字符串标记)
-    v = ET.SubElement(c, f'{{{MAIN_NS}}}v')
-    v.text = f'{value:.4f}'
-
 TEMPLATE = str(ATTACH_DIR / '附件5' / 'result1.xlsx')
 OUT = str(OUTPUT_DIR / 'result1.xlsx')
-zin = zipfile.ZipFile(TEMPLATE, 'r')
+OUT_TMP = OUT + '.tmp'
+OUT_NORMALIZED = OUT + '.normalized.tmp'
 
-def write_sheet(zout, name, root):
-    data = ET.tostring(root, encoding='UTF-8', xml_declaration=True)
-    zout.writestr(f'xl/worksheets/{name}.xml', data)
-
-with zipfile.ZipFile(OUT, 'w', zipfile.ZIP_DEFLATED) as zout:
-    for item in zin.infolist():
-        if item.filename in ('xl/worksheets/sheet1.xml', 'xl/worksheets/sheet2.xml'):
-            continue
-        zout.writestr(item, zin.read(item.filename))
+try:
+    workbook = load_workbook(TEMPLATE)
+    plan_sheet = workbook[workbook.sheetnames[0]]
+    charge_sheet = workbook[workbook.sheetnames[1]]
 
     # sheet1: 计划购电量 (B2..B145)
     # 内部数组是自然日顺序：x[0]=0:00-0:10 ... x[143]=23:50-24:00；
     # 官方模板行顺序是：0:10-0:20 ... 23:50-24:00, 次日0:00-0:10。
     # 因此模板第 k+2 行应写 x[(k+1) % N]。
-    root1 = ET.fromstring(zin.read('xl/worksheets/sheet1.xml'))
-    rows1 = {r.get('r'): r for r in root1.findall(f'{{{MAIN_NS}}}sheetData/{{{MAIN_NS}}}row')}
     for k in range(N):
-        fill_cell(rows1[str(k + 2)], 'B', x[(k + 1) % N])
-    write_sheet(zout, 'sheet1', root1)
+        plan_sheet.cell(row=k + 2, column=2, value=float(x[(k + 1) % N]))
 
-    # 充放电量
-    root2 = ET.fromstring(zin.read('xl/worksheets/sheet2.xml'))
-    rows2 = {r.get('r'): r for r in root2.findall(f'{{{MAIN_NS}}}sheetData/{{{MAIN_NS}}}row')}
+    # sheet2: 充放电量
     for i in range(6):
-        fill_cell(rows2[str(i + 2)], 'B', chg_blocks[i])
-        fill_cell(rows2[str(i + 2)], 'C', dis_blocks[i])
-    fill_cell(rows2['2'], 'E', E[0])    # 0:00 储电量
-    fill_cell(rows2['3'], 'E', E[-1])   # 24:00 储电量
-    write_sheet(zout, 'sheet2', root2)
+        charge_sheet.cell(row=i + 2, column=2, value=float(chg_blocks[i]))
+        charge_sheet.cell(row=i + 2, column=3, value=float(dis_blocks[i]))
+    charge_sheet['E2'] = float(E[0])    # 0:00 储电量
+    charge_sheet['E3'] = float(E[-1])   # 24:00 储电量
 
-zin.close()
+    workbook.save(OUT_TMP)
+    workbook.close()
+
+    # openpyxl 使用包内绝对关系路径；恢复为官方模板的相对路径，兼容 Q1 轻量读取器。
+    rels_name = 'xl/_rels/workbook.xml.rels'
+    with zipfile.ZipFile(OUT_TMP, 'r') as zin:
+        with zipfile.ZipFile(OUT_NORMALIZED, 'w', zipfile.ZIP_DEFLATED) as zout:
+            for item in zin.infolist():
+                content = zin.read(item.filename)
+                if item.filename == rels_name:
+                    content = content.replace(
+                        b'Target="/xl/worksheets/', b'Target="worksheets/'
+                    )
+                zout.writestr(item, content)
+    os.replace(OUT_NORMALIZED, OUT_TMP)
+    os.replace(OUT_TMP, OUT)
+finally:
+    if os.path.exists(OUT_TMP):
+        os.remove(OUT_TMP)
+    if os.path.exists(OUT_NORMALIZED):
+        os.remove(OUT_NORMALIZED)
 print(f'\n已生成结果文件: {OUT}')
 print('工作表“计划购电量”: 144 个 10 分钟区间购电量 (B2:B145)')
 print('工作表“充放电量”:   6 个 4 小时块充/放电量 (B2:C7) + 0:00/24:00 储电量 (E2:E3)')
