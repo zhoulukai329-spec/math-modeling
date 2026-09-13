@@ -6,6 +6,7 @@ from pathlib import Path
 import sys
 
 import numpy as np
+from openpyxl import load_workbook
 
 SRC = Path(__file__).resolve().parents[1] / "src"
 sys.path.insert(0, str(SRC))
@@ -58,3 +59,21 @@ def test_q43_verifier_recomputes_dynamic_actual_price_cost():
     report = verifier.verify_solution43(result)
     assert not report["passed"]
     assert any("cash cost baseline" in error for error in report["errors"])
+
+
+def test_q43_emergency_uses_separate_ten_minute_rows(tmp_path):
+    dio, sim, writer, _ = _load()
+    result = _result(dio, sim)
+    result.emergency[0, 0] = 1
+    result.emergency[0, 1] = 2
+    path = writer.write_result43(result, tmp_path / "result4-3.xlsx")
+    workbook = load_workbook(path, data_only=True)
+    try:
+        emergency = workbook["紧急购电量"]
+        assert emergency.max_row == 3
+        assert emergency["B2"].value == "0:10-0:20"
+        assert emergency["C2"].value == 1
+        assert emergency["B3"].value == "0:20-0:30"
+        assert emergency["C3"].value == 2
+    finally:
+        workbook.close()

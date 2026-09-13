@@ -63,18 +63,20 @@ def test_template_baseline_adjusted_and_unexecuted_are_distinct(writer, result, 
     assert workbook.worksheets[0]["B1"].value == "0:10-0:20"
     assert workbook.worksheets[0]["EO1"].value == "0:00-0:10+1"
     assert workbook.worksheets[0]["B3"].value == result.baseline[0, 0]
-    assert workbook.worksheets[1]["EO3"].value == result.final_commitment[0, -1]
+    expected_adjustment = result.final_commitment[0] - result.baseline[0]
+    assert workbook.worksheets[1]["EO3"].value == pytest.approx(expected_adjustment[-1])
     assert result.final_commitment[0, -1] != result.baseline[0, -1]
     assert workbook.worksheets[0]["B2"].value is None  # unselected Feb 1
-    assert workbook.worksheets[2]["C8"].value is None  # missing Feb 2 00:00
-    assert workbook.worksheets[2]["C9"].value == 0  # complete Feb 2 04:00..08:00
-    assert workbook.worksheets[2]["F8"].value == result.config.initial_soc
-    assert workbook.worksheets[2]["F9"].value == result.soc_before[0, -1]
-    assert workbook.worksheets[2]["C14"].value is None  # Mar 20 unexecuted
-    assert workbook.worksheets[2]["C21"].value is None  # Dec 31 unexecuted
-    assert workbook.worksheets[2]["A20"].value == original.worksheets[2]["A20"].value
+    assert workbook.worksheets[2]["C2"].value is None  # missing first-day calendar 00:00
+    assert workbook.worksheets[2]["C3"].value == 0  # complete first-day 04:00..08:00
+    assert workbook.worksheets[2]["F2"].value == result.config.initial_soc
+    assert workbook.worksheets[2]["F3"].value == result.soc_before[0, -1]
+    assert workbook.worksheets[2]["A2"].value.date() == result.dates[0]
+    assert workbook.worksheets[2]["A8"].value.date() == result.dates[1]
     assert workbook.worksheets[0]["B3"].style_id == original.worksheets[0]["B3"].style_id
     assert workbook.worksheets[0]["EQ3"].value == pytest.approx(result.price[0] @ result.baseline[0])
+    assert workbook.worksheets[0]["EP3"].value == pytest.approx(result.baseline[0].sum())
+    assert workbook.worksheets[1]["EP3"].value == pytest.approx(expected_adjustment.sum())
     fees = sum(v.up_cost + v.down_cost for v in result.versions if v.target_times[0].date() == result.dates[0])
     assert workbook.worksheets[1]["EQ3"].value == pytest.approx(fees)
 
@@ -85,7 +87,7 @@ def test_workbook_calendar_blocks_do_not_shift_midnight(writer, result, tmp_path
     changed.charge[0, 23] = 17
     changed.charge[0, 47] = 99
     path = writer.write_result3(changed, tmp_path / "calendar.xlsx")
-    assert load_workbook(path).worksheets[2]["C9"].value == 17
+    assert load_workbook(path).worksheets[2]["C3"].value == 17
 
 
 def test_npz_roundtrip_and_csv_retain_versions_and_unknowns(writer, verifier, result, tmp_path):
@@ -227,31 +229,51 @@ def test_smoke_rejects_calibration_before_running():
     assert "calibration is only" in run.stderr.lower()
 
 
-@pytest.mark.parametrize("day,row", [("2025-02-01", 2), ("2025-02-02", 8), ("2025-03-20", 14), ("2025-12-31", 21)])
-def test_each_battery_template_anchor_uses_actual_calendar_values(writer, result, tmp_path, day, row):
+def test_battery_table_contains_every_result_day_without_ellipsis(writer, result, tmp_path):
     changed = deepcopy(result)
-    delta = datetime.fromisoformat(day).date() - result.dates[0]
-    changed.dates = tuple(d + delta for d in result.dates)
-    changed.timestamps = np.asarray([[t + delta for t in times] for times in result.timestamps], dtype=object)
-    changed.versions = tuple(replace(v, issued_at=v.issued_at + delta,
-        target_times=tuple(t + delta for t in v.target_times)) for v in result.versions)
     changed.charge[0, 23] = 17
-    path = writer.write_result3(changed, tmp_path / "anchored.xlsx")
+    path = writer.write_result3(changed, tmp_path / "full-battery.xlsx")
     workbook = load_workbook(path)
-    assert workbook["充放电量"].cell(row + 1, 3).value == 17
-    assert workbook["充放电量"].max_row == 26
-    assert workbook["紧急购电量"].max_row == 11
+    sheet = workbook["充放电量"]
+    assert sheet.max_row == 1 + 6 * len(result.dates)
+    assert sheet["A2"].value.date() == result.dates[0]
+    assert sheet["A8"].value.date() == result.dates[1]
+    assert sheet["C3"].value == 17
+    assert all(cell.value != "⁝" for row in sheet.iter_rows() for cell in row)
 
 
-def test_emergency_template_contains_actual_intervals_and_no_added_dates(writer, result, tmp_path):
+def test_emergency_table_uses_one_row_per_ten_minute_interval_for_every_day(writer, result, tmp_path):
     path = writer.write_result3(result, tmp_path / "emergency.xlsx")
     sheet = load_workbook(path)["紧急购电量"]
-    expected = result.emergency[0, result.executed[0]].sum()
-    assert sheet["C5"].value == expected
-    assert sheet["B5"].value.startswith("0:10-0:20")
-    assert sheet["A8"].value == "⁝"
-    assert sheet["A9"].value == datetime(2025, 12, 31)
-    assert sheet.max_row == 11
+    totals = {day: 0.0 for day in result.dates}
+    current = None
+    expected = []
+    for i, day in enumerate(result.dates):
+        selected = [j for j in range(144) if result.executed[i, j] and result.emergency[i, j] > 1e-7]
+        if not selected:
+            expected.append((day, "无" if result.executed[i].all() else "已执行部分：无", 0.0))
+        for j in selected:
+            start = result.timestamps[i, j]
+            end = start + timedelta(minutes=10)
+            start_text = ("次日" if start.date() > day else "") + f"{start.hour}:{start.minute:02d}"
+            end_text = ("次日" if end.date() > day else "") + f"{end.hour}:{end.minute:02d}"
+            expected.append((day, f"{start_text}-{end_text}", result.emergency[i, j]))
+    assert sheet.max_row == 1 + len(expected)
+    for row in range(2, sheet.max_row + 1):
+        if sheet.cell(row, 1).value is not None:
+            current = sheet.cell(row, 1).value.date()
+        assert current in totals
+        period = sheet.cell(row, 2).value
+        assert "\n" not in period
+        expected_day, expected_period, expected_quantity = expected[row - 2]
+        assert current == expected_day
+        assert period == expected_period
+        assert "~" not in period
+        assert sheet.cell(row, 3).value == pytest.approx(expected_quantity)
+        totals[current] += sheet.cell(row, 3).value
+    for i, day in enumerate(result.dates):
+        assert totals[day] == pytest.approx(result.emergency[i, result.executed[i]].sum())
+    assert all(cell.value != "⁝" for row in sheet.iter_rows() for cell in row)
 
 
 def test_verifier_checks_emergency_binary_mode_even_with_zero_charge(verifier, result):

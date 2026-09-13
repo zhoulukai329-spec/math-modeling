@@ -14,6 +14,20 @@ import make_results as mr
 
 
 class Q42ResultTests(unittest.TestCase):
+    def test_emergency_rows_keep_each_positive_ten_minute_interval_separate(self):
+        e = np.zeros((1, dio.N))
+        e[0, 0:2] = [2.0, 3.0]
+        e[0, 3] = 7.0
+
+        rows = mr.build_emergency_rows(np.array([45689.0]), e)
+
+        self.assertEqual(rows, [
+            ["日期", "购电时间段", "购电量"],
+            [45689.0, "0:00-0:10", 2.0],
+            [None, "0:10-0:20", 3.0],
+            [None, "0:30-0:40", 7.0],
+        ])
+
     def test_plan_rows_use_next_midnight_and_recompute_row_total_and_cost(self):
         dates = np.array([45689.0, 45690.0])
         g = np.vstack([np.arange(dio.N, dtype=float),
